@@ -4,18 +4,56 @@ import (
 	"database/sql"
 	"log"
 	"os"
+	"time"
 
 	"github.com/google/uuid"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 type Entry struct {
-	User  string `json:"user"`
-	Score int    `json:"score"`
+	User          string    `json:"user"`
+	Score         int       `json:"score"`
+	TimeSubmitted time.Time `json:"submitted_at"`
 }
 
 type StorageWrapper struct {
 	db *sql.DB
+}
+
+func setupDB() *sql.DB {
+	connURL := os.Getenv("DB_URL")
+	db, err := sql.Open("pgx", connURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	db.Exec(`DROP TABLE IF EXISTS leaderboards, scores`)
+
+	_, err = db.Exec(`CREATE TABLE leaderboards (
+		id SERIAL,
+		leaderboard VARCHAR(64) UNIQUE,
+		display_name VARCHAR(64),
+		timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (id, leaderboard)
+	)`)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = db.Exec(`CREATE TABLE scores (
+		leaderboard VARCHAR(64) REFERENCES leaderboards(leaderboard),
+		username VARCHAR(64),
+		timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		score INT,
+		PRIMARY KEY(leaderboard, username)
+	)`)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	return db
 }
 
 func NewStorage() (StorageWrapper, error) {
@@ -27,6 +65,7 @@ func NewStorage() (StorageWrapper, error) {
 	_, err = db.Exec(`CREATE TABLE leaderboards (
 		id INTEGER PRIMARY KEY AUTOINCREMENT, 
 		leaderboard VARCHAR(64) UNIQUE,
+		display_name VARCHAR(64),
 		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`)
 
@@ -51,28 +90,41 @@ func NewStorage() (StorageWrapper, error) {
 
 }
 
-func (sw *StorageWrapper) Close() error {
-	return sw.db.Close()
+func (app *App) Close() error {
+	return app.db.Close()
 }
 
-func (sw *StorageWrapper) NewLeaderBoard() (uuid.UUID, error) {
+func (app *App) NewLeaderBoard(display_name string) (uuid.UUID, string, error) {
 	leaderboard := uuid.New()
-	_, err := sw.db.Exec("INSERT INTO leaderboards (leaderboard) VALUES (?)", leaderboard)
-	return leaderboard, err
+	_, err := app.db.Exec("INSERT INTO leaderboards (leaderboard, display_name) VALUES ($1, $2)", leaderboard, display_name)
+	return leaderboard, display_name, err
 }
 
-func (sw *StorageWrapper) UpdateScore(leaderboard uuid.UUID, user string, score int) error {
-	_, err := sw.db.Exec(`
-		INSERT INTO scores (leaderboard, user, score)
-		VALUES (?1, ?2, ?3)
-		ON CONFLICT (leaderboard, user) DO
+func (app *App) UpdateScore(leaderboard uuid.UUID, user string, score int) error {
+	_, err := app.db.Exec(`
+		INSERT INTO scores (leaderboard, username, score)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (leaderboard, username) DO
 		UPDATE SET score=excluded.score;
 		`, leaderboard, user, score)
 	return err
 }
 
-func (sw *StorageWrapper) GetLeaderboard(leaderboard uuid.UUID) ([]Entry, error) {
-	rows, err := sw.db.Query(`SELECT user, score FROM scores WHERE leaderboard=?`, leaderboard)
+func (app *App) GetLeaderboard(leaderboard uuid.UUID) ([]Entry, error) {
+	stmt, err := app.db.Prepare(`
+		SELECT username, score, timestamp 
+		FROM scores 
+		WHERE leaderboard=$1 AND timestamp > (CURRENT_DATE - INTERVAL '1 days')
+		ORDER BY 
+			score DESC,
+			timestamp DESC
+		LIMIT 100;
+		`)
+
+	if err != nil {
+		return nil, err
+	}
+	rows, err := stmt.Query(leaderboard)
 	if err != nil {
 		return nil, err
 	}
@@ -81,11 +133,10 @@ func (sw *StorageWrapper) GetLeaderboard(leaderboard uuid.UUID) ([]Entry, error)
 
 	for rows.Next() {
 		var e Entry
-		if err := rows.Scan(&e.User, &e.Score); err != nil {
+		if err := rows.Scan(&e.User, &e.Score, &e.TimeSubmitted); err != nil {
 			return entries, err
 		}
 		entries = append(entries, e)
-
 	}
 	if err = rows.Err(); err != nil {
 		return entries, err
