@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 	"time"
@@ -23,6 +24,7 @@ type StorageWrapper struct {
 
 func setupDB() *sql.DB {
 	connURL := os.Getenv("DB_URL")
+	fmt.Println("connURL:", connURL)
 	db, err := sql.Open("pgx", connURL)
 	if err != nil {
 		log.Fatal(err)
