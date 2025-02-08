@@ -11,6 +11,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      DB_URL: 'postgres://postgres:postgres@localhost:5432/postgres'
     services:
       postgres:
         image: postgres
@@ -25,10 +29,7 @@ jobs:
           - 5432:5432
     steps:
     - uses: actions/checkout@v4
-      env:
-        POSTGRES_HOST: localhost
-        POSTGRES_PORT: 5432
-        DB_URL: 'postgres://postgres:postgres@localhost:5432/postgres'
+      
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
