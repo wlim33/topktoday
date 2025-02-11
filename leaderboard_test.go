@@ -4,21 +4,25 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/google/uuid"
+	"github.com/go-chi/chi/v5"
+	"github.com/sqids/sqids-go"
+	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
-
-	"github.com/go-chi/chi/v5"
-	"github.com/stretchr/testify/assert"
 )
 
 func setupTestServer() TestContext {
 	app := App{
-		db: setupDB(),
+		db: setupDB(os.Getenv("DB_URL")),
 	}
 
+	s, _ := sqids.New(sqids.Options{
+		MinLength: 9,
+	})
+	app.s = s
 	router := app.setupRouter()
 	return TestContext{
 		router: router,
@@ -63,7 +67,6 @@ func TestAddScores(t *testing.T) {
 		DisplayName: "test name",
 	}), &resp)
 	assert.Equal(t, 200, c.w.Code)
-
 	assert.Equal(t, "test name", resp.Name)
 
 	var listResp LeaderboardResponse
@@ -141,13 +144,15 @@ func BenchmarkGetLeaderboard(b *testing.B) {
 	c.jsonRequest("POST", "/leaderboard", encode(&NewLeaderboardRequest{
 		DisplayName: "test leaderboard",
 	}), &resp)
+	s, _ := sqids.New()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 
+		id, _ := s.Encode([]uint64{uint64(n)})
 		c.jsonRequest("POST",
 			fmt.Sprintf("/leaderboard/%s/score", resp.Id),
 			encode(UpdateScoreRequest{
-				User:  uuid.New().String(),
+				User:  id,
 				Score: n,
 			}),
 			&MessageResponse{})

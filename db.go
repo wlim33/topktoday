@@ -2,14 +2,10 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
-	"os"
 	"time"
 
-	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 type Entry struct {
@@ -22,22 +18,21 @@ type StorageWrapper struct {
 	db *sql.DB
 }
 
-func setupDB() *sql.DB {
-	connURL := os.Getenv("DB_URL")
-	fmt.Println("connURL:", connURL)
+func setupDB(connURL string) *sql.DB {
 	db, err := sql.Open("pgx", connURL)
 	if err != nil {
 		log.Fatal(err)
+	} else {
+		log.Println("Connected to db successfully.")
+
 	}
 
 	db.Exec(`DROP TABLE IF EXISTS leaderboards, scores`)
 
 	_, err = db.Exec(`CREATE TABLE leaderboards (
-		id SERIAL,
-		leaderboard VARCHAR(64) UNIQUE,
+		id SERIAL PRIMARY KEY,
 		display_name VARCHAR(64),
-		timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		PRIMARY KEY (id, leaderboard)
+		timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	)`)
 
 	if err != nil {
@@ -45,7 +40,7 @@ func setupDB() *sql.DB {
 	}
 
 	_, err = db.Exec(`CREATE TABLE scores (
-		leaderboard VARCHAR(64) REFERENCES leaderboards(leaderboard),
+		leaderboard INT REFERENCES leaderboards(id),
 		username VARCHAR(64),
 		timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		score INT,
@@ -58,51 +53,27 @@ func setupDB() *sql.DB {
 	return db
 }
 
-func NewStorage() (StorageWrapper, error) {
-	os.Remove("./foo.db")
-	db, err := sql.Open("sqlite3", "./foo.db")
-	if err != nil {
-		log.Fatal(err)
-	}
-	_, err = db.Exec(`CREATE TABLE leaderboards (
-		id INTEGER PRIMARY KEY AUTOINCREMENT, 
-		leaderboard VARCHAR(64) UNIQUE,
-		display_name VARCHAR(64),
-		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-	)`)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = db.Exec(`CREATE TABLE scores (
-		leaderboard VARCHAR(64),
-		user VARCHAR(64),
-		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-		score INT,
-		PRIMARY KEY(leaderboard, user)
-	)`)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-	return StorageWrapper{
-		db,
-	}, err
-
-}
-
 func (app *App) Close() error {
 	return app.db.Close()
 }
 
-func (app *App) NewLeaderBoard(display_name string) (uuid.UUID, string, error) {
-	leaderboard := uuid.New()
-	_, err := app.db.Exec("INSERT INTO leaderboards (leaderboard, display_name) VALUES ($1, $2)", leaderboard, display_name)
-	return leaderboard, display_name, err
+func (app *App) NewLeaderBoard(display_name string) (uint64, string, error) {
+	row := app.db.QueryRow(`
+		INSERT INTO 
+			leaderboards (display_name) 
+		VALUES 
+			($1)
+		RETURNING id;
+		`, display_name)
+	var leaderboard_id int
+	err := row.Scan(&leaderboard_id)
+	if err != nil {
+		log.Println(err)
+	}
+	return uint64(leaderboard_id), display_name, err
 }
 
-func (app *App) UpdateScore(leaderboard uuid.UUID, user string, score int) error {
+func (app *App) UpdateScore(leaderboard uint64, user string, score int) error {
 	_, err := app.db.Exec(`
 		INSERT INTO scores (leaderboard, username, score)
 		VALUES ($1, $2, $3)
@@ -112,7 +83,7 @@ func (app *App) UpdateScore(leaderboard uuid.UUID, user string, score int) error
 	return err
 }
 
-func (app *App) GetLeaderboard(leaderboard uuid.UUID) ([]Entry, error) {
+func (app *App) GetLeaderboard(leaderboard uint64) ([]Entry, error) {
 	stmt, err := app.db.Prepare(`
 		SELECT username, score, timestamp 
 		FROM scores 

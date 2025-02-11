@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
-	"github.com/google/uuid"
 )
 
 type ErrResponse struct {
@@ -48,8 +47,8 @@ type ErrorResponse struct {
 }
 
 type NewLeaderboardResponse struct {
-	Id   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
+	Id   string `json:"id"`
+	Name string `json:"name"`
 }
 
 type LeaderboardResponse struct {
@@ -81,13 +80,10 @@ func UpdateScoreCtx(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
-func LeaderboardIDCtx(next http.Handler) http.Handler {
+func (app *App) LeaderboardIDCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		leaderboard_id, err := uuid.Parse(chi.URLParam(r, "id"))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
+		url_param := chi.URLParam(r, "id")
+		leaderboard_id := app.s.Decode(url_param)[0]
 		ctx := context.WithValue(r.Context(), ContextLeaderboardIdKey, leaderboard_id)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -115,8 +111,10 @@ func (app *App) postNewLeaderboard(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, ErrRender(db_err))
 		return
 	}
+
+	display_id, _ := app.s.Encode([]uint64{leaderboard_id})
 	resp := NewLeaderboardResponse{
-		Id:   leaderboard_id,
+		Id:   display_id,
 		Name: name,
 	}
 	if err := render.Render(w, r, &resp); err != nil {
@@ -127,7 +125,7 @@ func (app *App) postNewLeaderboard(w http.ResponseWriter, r *http.Request) {
 
 func (app *App) postNewScore(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	leaderboard_id := ctx.Value(ContextLeaderboardIdKey).(uuid.UUID)
+	leaderboard_id := ctx.Value(ContextLeaderboardIdKey).(uint64)
 	user := ctx.Value(ContextUserKey).(string)
 	new_score := ctx.Value(ContextScoreKey).(int)
 	if db_err := app.UpdateScore(leaderboard_id, user, new_score); db_err != nil {
@@ -139,7 +137,7 @@ func (app *App) postNewScore(w http.ResponseWriter, r *http.Request) {
 
 func (app *App) getLeaderboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	leaderboard_id := ctx.Value(ContextLeaderboardIdKey).(uuid.UUID)
+	leaderboard_id := ctx.Value(ContextLeaderboardIdKey).(uint64)
 
 	scores, db_err := app.GetLeaderboard(leaderboard_id)
 	if db_err != nil {
