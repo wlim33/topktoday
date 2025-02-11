@@ -89,15 +89,6 @@ steps:
       export ID_TOKEN=$(cat _id_token)
       go test -tags=system -v ./...
 
-# Clean up system test resources
-- id: 'Delete image and service'
-  name: 'gcr.io/cloud-builders/gcloud'
-  entrypoint: '/bin/bash'
-  args:
-    - '-c'
-    - |
-      gcloud artifacts docker images delete $_GCR_HOSTNAME/$PROJECT_ID/$_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA --quiet
-      gcloud run services delete ${_SERVICE_NAME}-$BUILD_ID --region ${_DEPLOY_REGION} --quiet
 
 substitutions:
   _GCR_HOSTNAME: us-west2-docker.pkg.dev
