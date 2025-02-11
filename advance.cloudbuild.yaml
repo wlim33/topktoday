@@ -100,10 +100,17 @@ steps:
       gcloud run services delete ${_SERVICE_NAME}-$BUILD_ID --region ${_DEPLOY_REGION} --quiet
 
 substitutions:
+<<<<<<< HEAD
   _GCR_HOSTNAME: us-central1-docker.pkg.dev
   _SERVICE_NAME: microservice-template
   _DEPLOY_REGION: us-central1
   _REPOSITORY: samples
+=======
+  _GCR_HOSTNAME: us-west2-docker.pkg.dev
+  _SERVICE_NAME: webapp
+  _DEPLOY_REGION: us-west2
+  _REPOSITORY: dailyleader
+>>>>>>> 6a41355 (cloud run setup)
 
 options:
   volumes:
