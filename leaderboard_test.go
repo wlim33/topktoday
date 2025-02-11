@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/go-chi/chi/v5"
-	"github.com/sqids/sqids-go"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/sqids/sqids-go"
+	"github.com/stretchr/testify/assert"
 )
 
 func setupTestServer() TestContext {
