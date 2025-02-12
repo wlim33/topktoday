@@ -61,7 +61,7 @@ steps:
       gcloud run deploy ${_SERVICE_NAME}-$BUILD_ID \
         --image $_GCR_HOSTNAME/$PROJECT_ID/$_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA \
         --region ${_DEPLOY_REGION} \
-        --update-secrets=DB_URL=DB_URL:1
+        --update-secrets=DB_URL=DB_URL:1 \
         --allow-unauthenticated
 
 - id: 'Retrieve Service URL'
