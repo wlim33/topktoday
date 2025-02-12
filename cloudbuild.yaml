@@ -61,6 +61,7 @@ steps:
       gcloud run deploy ${_SERVICE_NAME}-$BUILD_ID \
         --image $_GCR_HOSTNAME/$PROJECT_ID/$_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA \
         --region ${_DEPLOY_REGION} \
+        --update-secrets=DB_URL=DB_URL:1
 
 - id: 'Retrieve Service URL'
   name: 'gcr.io/cloud-builders/gcloud:latest'
@@ -92,7 +93,7 @@ steps:
 substitutions:
   _GCR_HOSTNAME: us-west2-docker.pkg.dev
   _SERVICE_NAME: webapp
-  _DEPLOY_REGION: us-east1
+  _DEPLOY_REGION: us-west2
   _REPOSITORY: dailyleader
 
 options:
