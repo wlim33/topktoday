@@ -83,6 +83,21 @@ func (app *App) UpdateScore(leaderboard uint64, user string, score int) error {
 	return err
 }
 
+func (app *App) GetLeaderboardName(leaderboard uint64) (string, error) {
+	row := app.db.QueryRow(`
+		SELECT display_name
+		FROM leaderboards 
+		WHERE id=$1 AND timestamp > (CURRENT_DATE - INTERVAL '1 days')
+		`)
+
+	var display_name string
+	err := row.Scan(&display_name)
+	if err != nil {
+		return "", err
+	}
+	return display_name, err
+
+}
 func (app *App) GetLeaderboard(leaderboard uint64) ([]Entry, error) {
 	stmt, err := app.db.Prepare(`
 		SELECT username, score, timestamp 
