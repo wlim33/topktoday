@@ -62,6 +62,7 @@ steps:
         --image $_GCR_HOSTNAME/$PROJECT_ID/$_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA \
         --region ${_DEPLOY_REGION} \
         --update-secrets=DB_URL=DB_URL:1
+        --allow-unauthenticated
 
 - id: 'Retrieve Service URL'
   name: 'gcr.io/cloud-builders/gcloud:latest'
