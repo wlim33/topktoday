@@ -38,11 +38,8 @@ func (app *App) setupRouter() *chi.Mux {
 		r.Route("/{id}", func(r chi.Router) {
 			r.Use(app.LeaderboardIDCtx)
 			r.Get("/", app.getLeaderboard)
-			r.With(UpdateScoreCtx).Post("/score", app.postNewScore)
-		})
-		r.Route("/{id}", func(r chi.Router) {
-			r.Use(app.LeaderboardIDCtx)
 			r.Get("/name", app.getLeaderboardName)
+			r.With(UpdateScoreCtx).Post("/score", app.postNewScore)
 		})
 	})
 	return r
