@@ -55,6 +55,14 @@ type LeaderboardResponse struct {
 	Scores []Entry `json:"scores"`
 }
 
+type LeaderboardNameResponse struct {
+	DisplayName string `json:"display_name"`
+}
+
+func (rd *LeaderboardNameResponse) Render(w http.ResponseWriter, r *http.Request) error {
+	return nil
+}
+
 func (rd *LeaderboardResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
@@ -147,6 +155,24 @@ func (app *App) getLeaderboard(w http.ResponseWriter, r *http.Request) {
 
 	resp := LeaderboardResponse{
 		scores,
+	}
+	if err := render.Render(w, r, &resp); err != nil {
+		render.Render(w, r, ErrRender(err))
+		return
+	}
+}
+func (app *App) getLeaderboardName(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	leaderboard_id := ctx.Value(ContextLeaderboardIdKey).(uint64)
+
+	display_name, db_err := app.GetLeaderboardName(leaderboard_id)
+	if db_err != nil {
+		render.Render(w, r, ErrRender(db_err))
+		return
+	}
+
+	resp := LeaderboardNameResponse{
+		display_name,
 	}
 	if err := render.Render(w, r, &resp); err != nil {
 		render.Render(w, r, ErrRender(err))
