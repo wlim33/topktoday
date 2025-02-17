@@ -1,167 +1,157 @@
-//go:build integration
-// +build integration
-
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/sqids/sqids-go"
 	"github.com/stretchr/testify/assert"
 )
 
-func setupTestServer() TestContext {
+func setupTestApi(t humatest.TB) humatest.TestAPI {
 	app := App{
 		db: setupDB(os.Getenv("DB_URL")),
 	}
-
 	s, _ := sqids.New(sqids.Options{
 		MinLength: 9,
 	})
 	app.s = s
-	router := app.setupRouter()
-	return TestContext{
-		router: router,
-		w:      httptest.NewRecorder(),
+
+	_, api := humatest.New(t)
+	app.addRoutes(api)
+	return api
+}
+
+func getLeaderboard(api humatest.TestAPI, leaderboard_id string) (LeaderboardResponseBody, *httptest.ResponseRecorder) {
+	getResp := api.Get(fmt.Sprintf("/leaderboard/%s", leaderboard_id))
+	var lResp LeaderboardResponseBody
+	json.Unmarshal(getResp.Body.Bytes(), &lResp)
+	return lResp, getResp
+
+}
+
+func TestGetBadIDEmpty(t *testing.T) {
+	api := setupTestApi(t)
+	badID := ""
+	_, getResp := getLeaderboard(api, badID)
+	assert.Equal(t, 404, getResp.Code)
+}
+
+func TestGetBadIDTooShort(t *testing.T) {
+	api := setupTestApi(t)
+	badID := "123"
+	_, getResp := getLeaderboard(api, badID)
+	assert.Equal(t, 422, getResp.Code)
+}
+
+func TestGetBadIDTooLong(t *testing.T) {
+	api := setupTestApi(t)
+	badID := "iaersntaoirseoiaerstoieanrt"
+	_, getResp := getLeaderboard(api, badID)
+	assert.Equal(t, 422, getResp.Code)
+}
+func TestAddScores(t *testing.T) {
+	api := setupTestApi(t)
+
+	resp := api.Post("/leaderboard", map[string]any{
+		"name": "test name",
+	})
+	assert.Equal(t, 200, resp.Code)
+	var newResp NewLeaderboardResponseBody
+	json.Unmarshal(resp.Body.Bytes(), &newResp)
+	fmt.Println("newResp", newResp)
+	assert.Equal(t, "test name", newResp.Name)
+
+	id := newResp.Id
+
+	if lResp, getResp := getLeaderboard(api, id); assert.Equal(t, 200, getResp.Code) {
+		assert.Zero(t, len(lResp.Scores))
 	}
 
-}
+	postResp := api.Post(
+		fmt.Sprintf("/leaderboard/%s/score", id),
+		map[string]any{
+			"user":  "test",
+			"score": 9,
+		})
 
-type TestContext struct {
-	router *chi.Mux
-	w      *httptest.ResponseRecorder
-}
+	assert.Equal(t, 200, postResp.Code)
 
-func encode(req interface{}) *bytes.Reader {
-	jsonReq, _ := json.Marshal(req)
-	return bytes.NewReader(jsonReq)
-}
+	if lResp, getResp := getLeaderboard(api, id); assert.Equal(t, 200, getResp.Code) {
+		assert.Equal(t, 1, len(lResp.Scores))
+		assert.Equal(t, 9, lResp.Scores[0].Score)
+	}
 
-func (c *TestContext) jsonRequest(method string, path string, body io.Reader, target interface{}) error {
-	req, _ := http.NewRequest(method, path, body)
-	c.router.ServeHTTP(c.w, req)
+	postResp2 := api.Post(
+		fmt.Sprintf("/leaderboard/%s/score", id),
+		map[string]any{
+			"user":  "test user 2",
+			"score": 10,
+		})
 
-	return json.NewDecoder(c.w.Body).Decode(&target)
-}
+	assert.Equal(t, 200, postResp2.Code)
 
-func TestPingRoute(t *testing.T) {
-	c := setupTestServer()
+	if lResp, getResp := getLeaderboard(api, id); assert.Equal(t, 200, getResp.Code) {
+		assert.Equal(t, 10, lResp.Scores[0].Score)
+		assert.Equal(t, 9, lResp.Scores[1].Score)
+	}
 
-	var pongResponse MessageResponse
-	c.jsonRequest("GET", "/ping", nil, &pongResponse)
+	postResp3 := api.Post(
+		fmt.Sprintf("/leaderboard/%s/score", id),
+		map[string]any{
+			"user":  "test user 2",
+			"score": 11,
+		})
+	assert.Equal(t, 200, postResp3.Code)
 
-	assert.Equal(t, 200, c.w.Code)
-	assert.Equal(t, "pong", pongResponse.Message)
+	if lResp, getResp := getLeaderboard(api, id); assert.Equal(t, 200, getResp.Code) {
+		assert.Equal(t, 2, len(lResp.Scores))
+		assert.Equal(t, 11, lResp.Scores[0].Score)
+		assert.Equal(t, 9, lResp.Scores[1].Score)
+	}
+	postResp4 := api.Post(
+		fmt.Sprintf("/leaderboard/%s/score", id),
+		map[string]any{
+			"user":  "test user 3",
+			"score": 11,
+		})
+	assert.Equal(t, 200, postResp4.Code)
 
-}
-
-func TestAddScores(t *testing.T) {
-	c := setupTestServer()
-
-	var resp NewLeaderboardResponse
-	c.jsonRequest("POST", "/leaderboard", encode(&NewLeaderboardRequest{
-		DisplayName: "test name",
-	}), &resp)
-	assert.Equal(t, 200, c.w.Code)
-	assert.Equal(t, "test name", resp.Name)
-
-	var listResp LeaderboardResponse
-	c.jsonRequest("GET", fmt.Sprintf("/leaderboard/%s", resp.Id), nil, &listResp)
-
-	assert.Equal(t, 200, c.w.Code)
-	assert.Zero(t, len(listResp.Scores))
-
-	c.jsonRequest("POST",
-		fmt.Sprintf("/leaderboard/%s/score", resp.Id),
-		encode(UpdateScoreRequest{
-			User:  "test",
-			Score: 9,
-		}),
-		&MessageResponse{})
-	assert.Equal(t, 200, c.w.Code)
-
-	var secondListResp LeaderboardResponse
-	c.jsonRequest("GET", fmt.Sprintf("/leaderboard/%s", resp.Id), nil, &secondListResp)
-
-	assert.Equal(t, 200, c.w.Code)
-	assert.Equal(t, 1, len(secondListResp.Scores))
-	assert.Equal(t, 9, secondListResp.Scores[0].Score)
-
-	c.jsonRequest("POST",
-		fmt.Sprintf("/leaderboard/%s/score", resp.Id),
-		encode(UpdateScoreRequest{
-			User:  "test user 2",
-			Score: 10,
-		}),
-		&MessageResponse{})
-	assert.Equal(t, 200, c.w.Code)
-
-	var thirdResp LeaderboardResponse
-	c.jsonRequest("GET", fmt.Sprintf("/leaderboard/%s", resp.Id), nil, &thirdResp)
-	assert.Equal(t, 10, thirdResp.Scores[0].Score)
-	assert.Equal(t, 9, thirdResp.Scores[1].Score)
-
-	c.jsonRequest("POST",
-		fmt.Sprintf("/leaderboard/%s/score", resp.Id),
-		encode(UpdateScoreRequest{
-			User:  "test user 2",
-			Score: 11,
-		}),
-		&MessageResponse{})
-	assert.Equal(t, 200, c.w.Code)
-
-	var fourth LeaderboardResponse
-	c.jsonRequest("GET", fmt.Sprintf("/leaderboard/%s", resp.Id), nil, &fourth)
-	assert.Equal(t, 2, len(fourth.Scores))
-	assert.Equal(t, 11, fourth.Scores[0].Score)
-	assert.Equal(t, 9, fourth.Scores[1].Score)
-
-	c.jsonRequest("POST",
-		fmt.Sprintf("/leaderboard/%s/score", resp.Id),
-		encode(UpdateScoreRequest{
-			User:  "test user 3",
-			Score: 11,
-		}),
-		&MessageResponse{})
-	assert.Equal(t, 200, c.w.Code)
-
-	var fifth LeaderboardResponse
-	c.jsonRequest("GET", fmt.Sprintf("/leaderboard/%s", resp.Id), nil, &fifth)
-	assert.Equal(t, 3, len(fifth.Scores))
-	assert.Equal(t, 11, fifth.Scores[0].Score)
-	assert.Equal(t, 11, fifth.Scores[1].Score)
-	assert.Equal(t, 9, fifth.Scores[2].Score)
+	if lResp, getResp := getLeaderboard(api, id); assert.Equal(t, 200, getResp.Code) {
+		assert.Equal(t, 3, len(lResp.Scores))
+		assert.Equal(t, 11, lResp.Scores[0].Score)
+		assert.Equal(t, 11, lResp.Scores[1].Score)
+		assert.Equal(t, 9, lResp.Scores[2].Score)
+	}
 }
 
 func BenchmarkGetLeaderboard(b *testing.B) {
-	c := setupTestServer()
+	api := setupTestApi(b)
 
-	var resp NewLeaderboardResponse
-	c.jsonRequest("POST", "/leaderboard", encode(&NewLeaderboardRequest{
-		DisplayName: "test leaderboard",
-	}), &resp)
+	resp := api.Post("/leaderboard", map[string]any{
+		"name": "test leaderboard",
+	})
+
+	var newResp NewLeaderboardResponseBody
+	json.Unmarshal(resp.Body.Bytes(), newResp)
 	s, _ := sqids.New()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 
 		id, _ := s.Encode([]uint64{uint64(n)})
-		c.jsonRequest("POST",
-			fmt.Sprintf("/leaderboard/%s/score", resp.Id),
-			encode(UpdateScoreRequest{
-				User:  id,
-				Score: n,
-			}),
-			&MessageResponse{})
 
-		var secondListResp LeaderboardResponse
-		c.jsonRequest("GET", fmt.Sprintf("/leaderboard/%s", resp.Id), nil, &secondListResp)
+		api.Post(
+			fmt.Sprintf("/leaderboard/%s/score", id),
+			map[string]any{
+				"user":  id,
+				"score": n,
+			})
+
+		getLeaderboard(api, newResp.Id)
+
 	}
 }

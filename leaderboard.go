@@ -2,15 +2,14 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 
 	"cloud.google.com/go/logging"
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/render"
 	"github.com/sqids/sqids-go"
 )
 
@@ -20,57 +19,39 @@ type App struct {
 	log       *logging.Logger
 	db        *sql.DB
 	s         *sqids.Sqids
+	api       huma.API
 }
 
-func (app *App) setupRouter() *chi.Mux {
-	r := chi.NewRouter()
-	r.Use(middleware.Logger)
-	r.Use(middleware.RequestID)
-	r.Use(middleware.Recoverer)
-	r.Use(middleware.URLFormat)
-	r.Use(render.SetContentType(render.ContentTypeJSON))
-	r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
-		resp := MessageResponse{Message: "pong"}
-		json.NewEncoder(w).Encode(&resp)
-	})
-	r.Route("/leaderboard", func(r chi.Router) {
-		r.With(LeaderboardNameCtx).Post("/", app.postNewLeaderboard)
-		r.Route("/{id}", func(r chi.Router) {
-			r.Use(app.LeaderboardIDCtx)
-			r.Get("/", app.getLeaderboard)
-			r.Get("/name", app.getLeaderboardName)
-			r.With(UpdateScoreCtx).Post("/score", app.postNewScore)
-		})
-	})
-	return r
+func (app *App) addRoutes(api huma.API) {
+	huma.Get(api, "/leaderboard/{id}", app.getLeaderboard)
+	huma.Get(api, "/leaderboard/{id}/name", app.getLeaderboardName)
+	huma.Post(api, "/leaderboard/{id}/score", app.postNewScore)
+	huma.Post(api, "/leaderboard", app.postNewLeaderboard)
+	app.api = api
 }
 
 func main() {
-
-	port := os.Getenv("PORT")
-	db_url := os.Getenv("DB_URL")
-
-	app := App{
-		db:  setupDB(db_url),
-		log: &logging.Logger{},
-	}
-
-	s, err := sqids.New(sqids.Options{
-		MinLength: 9,
-	})
-
-	if err != nil {
-		log.Fatal(err)
-	}
-	app.s = s
-
-	defer app.db.Close()
+	port, db_url := os.Getenv("PORT"), os.Getenv("DB_URL")
 	if port == "" {
 		port = "8080"
 		log.Printf("defaulting to port %s", port)
 	}
+	app := App{
+		db:  setupDB(db_url),
+		log: &logging.Logger{},
+	}
+	defer app.db.Close()
 
-	r := app.setupRouter()
+	if s, err := sqids.New(sqids.Options{MinLength: 9}); err != nil {
+		log.Fatal(err)
+	} else {
+		app.s = s
+	}
+
+	r := chi.NewMux()
+	api := humachi.New(r, huma.DefaultConfig("TopKTodayLeaderboard", "0.0.1"))
+	app.addRoutes(api)
+
 	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatal(err)
 	}
