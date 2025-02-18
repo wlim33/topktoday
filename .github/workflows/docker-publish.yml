@@ -35,6 +35,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         id: repo_checkout
+        with:
+          fetch-depth: 0
       - run: |
           git describe --tags --abbrev=0 >> $GITHUB_OUTPUT
 
