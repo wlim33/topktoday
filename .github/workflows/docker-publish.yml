@@ -38,7 +38,7 @@ jobs:
         with:
           fetch-depth: 0
       - run: |
-          echo "git describe --tags --abbrev=0" >> $GITHUB_OUTPUT
+          echo "LATEST_TAG=$(git describe --tags --abbrev=0)" >> $GITHUB_OUTPUT
 
       - name: Install cosign
         if: github.event_name != 'pull_request'
@@ -83,7 +83,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            VERSION=${{ steps.repo_checkout.outputs[0] }}
+            VERSION=${{ steps.repo_checkout.outputs.LATEST_TAG }}
 
       # Sign the resulting Docker image digest except on PRs.
       # This will only write to the public Rekor transparency log when the Docker
