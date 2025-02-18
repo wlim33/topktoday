@@ -16,7 +16,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/spf13/cobra"
 	"github.com/sqids/sqids-go"
-	"gopkg.in/yaml.v3"
 )
 
 type CloudConfigs struct {
@@ -33,10 +32,6 @@ var DOCS = ""
 var id_length = 9
 
 func OpenAPIGenConfig() huma.Config {
-	var c CloudConfigs
-	file, _ := os.ReadFile("cloudbuild.yaml")
-	yaml.Unmarshal(file, &c)
-
 	config := huma.DefaultConfig("leaderapi", version)
 	url := "https://api.topktoday.dev"
 	config.Extensions = map[string]any{
