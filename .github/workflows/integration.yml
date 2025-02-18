@@ -9,7 +9,7 @@ on:
   pull_request:
     branches: [ "release" ]
 jobs:
-  build:
+  test-integration:
     runs-on: ubuntu-latest
     env:
       POSTGRES_HOST: localhost
