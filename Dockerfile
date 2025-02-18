@@ -18,8 +18,9 @@
 
 FROM golang:bookworm as builder
 
-ARG VERSION="0.0.0"
+ARG VERSION=0.0.0
 ENV VERSION=$VERSION
+
 # Create and change to the app directory.
 WORKDIR /app
 
@@ -32,8 +33,9 @@ RUN go mod download
 # Copy local code to the container image.
 COPY . ./
 
+RUN echo $VERSION
 # Build the binary.
-RUN go build -ldflags "-X main.VERSION=$VERSION" -mod=readonly -v -o server
+RUN go build -ldflags "-X main.VERSION=${VERSION}" -mod=readonly -v -o server
 
 # Use the official Debian slim image for a lean production container.
 # https://hub.docker.com/_/debian

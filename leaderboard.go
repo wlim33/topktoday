@@ -73,6 +73,7 @@ type Options struct {
 }
 
 func main() {
+	log.Printf("app version: %s", VERSION)
 
 	port, db_url := os.Getenv("PORT"), os.Getenv("DB_URL")
 	app := App{
@@ -112,7 +113,6 @@ func main() {
 			Use:   "openapi",
 			Short: "Print the OpenAPI spec",
 			Run: func(cmd *cobra.Command, args []string) {
-				fmt.Println("openapi claled")
 				b, err := app.api.OpenAPI().YAML()
 				if err != nil {
 					panic(err)
