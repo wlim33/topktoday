@@ -35,7 +35,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         id: repo_checkout
-        run: |
+      - run: |
           git describe --tags --abbrev=0 >> $GITHUB_OUTPUT
 
       - name: Install cosign
