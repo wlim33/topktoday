@@ -34,7 +34,9 @@ jobs:
     steps:
       - name: Checkout repository
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
       # Install the cosign tool except on PR
       # https://github.com/sigstore/cosign-installer
       - uses: go-semantic-release/action@v1
