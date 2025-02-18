@@ -26,13 +26,13 @@ type CloudConfigs struct {
 	} `yaml:"substitutions"`
 }
 
-var version string
+var VERSION string
 var CLI = ""
 var DOCS = ""
 var id_length = 9
 
 func OpenAPIGenConfig() huma.Config {
-	config := huma.DefaultConfig("leaderapi", version)
+	config := huma.DefaultConfig("leaderapi", VERSION)
 	url := "https://api.topktoday.dev"
 	config.Extensions = map[string]any{
 		"host": url,
@@ -57,7 +57,7 @@ type App struct {
 }
 
 func (app *App) addRoutes(api huma.API) {
-	huma.Get(api, "/health", app.getLeaderboard)
+	huma.Get(api, "/health", app.healthCheck)
 	huma.Get(api, "/leaderboard/{id}", app.getLeaderboard)
 	huma.Get(api, "/leaderboard/{id}", app.getLeaderboard)
 	huma.Get(api, "/leaderboard/{id}/name", app.getLeaderboardName)
@@ -73,6 +73,7 @@ type Options struct {
 }
 
 func main() {
+	log.Printf("app version: %s", VERSION)
 
 	port, db_url := os.Getenv("PORT"), os.Getenv("DB_URL")
 	app := App{
@@ -112,7 +113,6 @@ func main() {
 			Use:   "openapi",
 			Short: "Print the OpenAPI spec",
 			Run: func(cmd *cobra.Command, args []string) {
-				fmt.Println("openapi claled")
 				b, err := app.api.OpenAPI().YAML()
 				if err != nil {
 					panic(err)
