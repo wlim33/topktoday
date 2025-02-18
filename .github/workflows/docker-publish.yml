@@ -34,12 +34,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        id: repo_checkout
         with:
           fetch-depth: 0
-      - run: |
-          echo "LATEST_TAG=$(git describe --tags --abbrev=0)" >> $GITHUB_OUTPUT
 
+      - name: Debug
+        id: set-version
+        run: |
+          echo "LATEST_TAG=$(git describe --tags --abbrev=0 2> /dev/null || git describe --always)" >> $GITHUB_OUTPUT
       - name: Install cosign
         if: github.event_name != 'pull_request'
         uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 #v3.5.0
@@ -83,8 +84,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            VERSION=${{ steps.repo_checkout.outputs.LATEST_TAG }}
-
+            VERSION=${{ steps.set-version.outputs.LATEST_TAG }}
       # Sign the resulting Docker image digest except on PRs.
       # This will only write to the public Rekor transparency log when the Docker
       # repository is public to avoid leaking data.  If you would like to publish
