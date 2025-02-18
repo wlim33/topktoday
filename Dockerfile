@@ -33,7 +33,6 @@ RUN go mod download
 # Copy local code to the container image.
 COPY . ./
 
-RUN echo $VERSION
 # Build the binary.
 RUN go build -ldflags "-X main.VERSION=$VERSION" -mod=readonly -v -o server
 
