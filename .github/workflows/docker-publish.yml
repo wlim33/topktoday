@@ -84,7 +84,8 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             VERSION=${{ steps.repo_checkout.outputs.LATEST_TAG }}
-
+      - name: Debug
+        run: echo ${{ steps.repo_checkout.outputs.LATEST_TAG }}
       # Sign the resulting Docker image digest except on PRs.
       # This will only write to the public Rekor transparency log when the Docker
       # repository is public to avoid leaking data.  If you would like to publish
