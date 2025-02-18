@@ -26,13 +26,13 @@ type CloudConfigs struct {
 	} `yaml:"substitutions"`
 }
 
-var version string
+var VERSION string
 var CLI = ""
 var DOCS = ""
 var id_length = 9
 
 func OpenAPIGenConfig() huma.Config {
-	config := huma.DefaultConfig("leaderapi", version)
+	config := huma.DefaultConfig("leaderapi", VERSION)
 	url := "https://api.topktoday.dev"
 	config.Extensions = map[string]any{
 		"host": url,
@@ -57,7 +57,7 @@ type App struct {
 }
 
 func (app *App) addRoutes(api huma.API) {
-	huma.Get(api, "/health", app.getLeaderboard)
+	huma.Get(api, "/health", app.healthCheck)
 	huma.Get(api, "/leaderboard/{id}", app.getLeaderboard)
 	huma.Get(api, "/leaderboard/{id}", app.getLeaderboard)
 	huma.Get(api, "/leaderboard/{id}/name", app.getLeaderboardName)

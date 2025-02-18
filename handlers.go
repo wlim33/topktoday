@@ -121,6 +121,6 @@ func (app *App) healthCheck(ctx context.Context, input *struct {
 }) (*HealthCheckResponse, error) {
 
 	resp := &HealthCheckResponse{}
-	resp.Body.Message = "Welcome!"
+	resp.Body.Message = VERSION
 	return resp, nil
 }
