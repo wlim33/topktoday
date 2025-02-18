@@ -93,10 +93,11 @@ steps:
 
 substitutions:
   _GCR_HOSTNAME: us-west2-docker.pkg.dev
-  _SERVICE_NAME: webapp
+  _SERVICE_NAME: api
   _DEPLOY_REGION: us-west2
   _REPOSITORY: dailyleader
 
+serviceAccount: 'projects/dailyleader/serviceAccounts/dailyleader@dailyleader.iam.gserviceaccount.com'
 options:
   volumes:
   - name: go-modules
