@@ -22,7 +22,7 @@ type NewLeaderboardBody struct {
 	}
 }
 type MessageResponse struct {
-	Message string `json:"message"`
+	Message string `json:"message" example:"All systems go!" doc:"Human readable message."`
 }
 type ErrorResponse struct {
 	Error error `json:"error"`
@@ -44,6 +44,9 @@ type LeaderboardResponse struct {
 	Body LeaderboardResponseBody
 }
 
+type HealthCheckResponse struct {
+	Body MessageResponse
+}
 type LeaderboardNameResponseBody struct {
 	Name string `json:"name" example:"My Fist Leaderboard" doc:"Leaderboard display name."`
 }
@@ -99,6 +102,7 @@ func (app *App) getLeaderboard(ctx context.Context, input *struct {
 	resp.Body.Scores = scores
 	return resp, nil
 }
+
 func (app *App) getLeaderboardName(ctx context.Context, input *struct {
 	LeaderboardIDParam
 }) (*LeaderboardNameResponse, error) {
@@ -110,5 +114,13 @@ func (app *App) getLeaderboardName(ctx context.Context, input *struct {
 
 	resp := &LeaderboardNameResponse{}
 	resp.Body.Name = display_name
+	return resp, nil
+}
+
+func (app *App) healthCheck(ctx context.Context, input *struct {
+}) (*HealthCheckResponse, error) {
+
+	resp := &HealthCheckResponse{}
+	resp.Body.Message = "Welcome!"
 	return resp, nil
 }
