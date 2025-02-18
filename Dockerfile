@@ -35,7 +35,7 @@ COPY . ./
 
 RUN echo $VERSION
 # Build the binary.
-RUN go build -ldflags "-X main.VERSION=${VERSION}" -mod=readonly -v -o server
+RUN go build -ldflags "-X main.VERSION=$VERSION" -mod=readonly -v -o server
 
 # Use the official Debian slim image for a lean production container.
 # https://hub.docker.com/_/debian
