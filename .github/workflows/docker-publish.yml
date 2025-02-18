@@ -38,12 +38,14 @@ jobs:
         with:
           fetch-depth: 0
       - run: |
-          echo "LATEST_TAG=$(git describe --tags --abbrev=0)" >> $env::GITHUB_OUTPUT
+          echo "LATEST_TAG=$(git describe --tags --abbrev=0)" >> $GITHUB_OUTPUT
+          echo "TEST_VALUE=green" >> $GITHUB_OUTPUT
 
       - name: Debug
         run: |
           echo ${{ steps.repo-checkout.outputs }}
           echo ${{ steps.repo-checkout.outputs.LATEST_TAG }}
+          echo ${{ steps.repo-checkout.outputs.TEST_VALUE }}
       - name: Install cosign
         if: github.event_name != 'pull_request'
         uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 #v3.5.0
