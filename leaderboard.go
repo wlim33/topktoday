@@ -14,6 +14,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/danielgtaylor/huma/v2/humacli"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
 	"github.com/spf13/cobra"
 	"github.com/sqids/sqids-go"
 )
@@ -57,6 +58,7 @@ type App struct {
 }
 
 func (app *App) addRoutes(api huma.API) {
+
 	huma.Get(api, "/health", app.healthCheck)
 	huma.Get(api, "/leaderboard/{id}", app.getLeaderboard)
 	huma.Get(api, "/leaderboard/{id}", app.getLeaderboard)
@@ -85,6 +87,17 @@ func main() {
 		app.s = s
 	}
 	r := chi.NewMux()
+
+	r.Use(cors.Handler(cors.Options{
+		// AllowedOrigins:   []string{"https://foo.com"}, // Use this to allow specific origin hosts
+		AllowedOrigins: []string{"https://*", "http://*"},
+		// AllowOriginFunc:  func(r *http.Request, origin string) bool { return true },
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: false,
+		MaxAge:           300, // Maximum value not ignored by any of major browsers
+	}))
 	api := humachi.New(r, OpenAPIGenConfig())
 	app.addRoutes(api)
 
