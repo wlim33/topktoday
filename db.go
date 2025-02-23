@@ -88,7 +88,7 @@ func (app *App) GetLeaderboardName(leaderboard uint64) (string, error) {
 		SELECT display_name
 		FROM leaderboards 
 		WHERE id=$1 AND timestamp > (CURRENT_DATE - INTERVAL '1 days')
-		`)
+		`, leaderboard)
 
 	var display_name string
 	err := row.Scan(&display_name)
