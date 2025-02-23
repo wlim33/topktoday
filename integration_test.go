@@ -37,6 +37,30 @@ func getLeaderboard(api humatest.TestAPI, leaderboard_id string) (LeaderboardRes
 
 }
 
+func TestDisplayName(t *testing.T) {
+	api := setupTestApi(t)
+	display_name := "Test Leaderboard Name"
+
+	resp := api.Post("/leaderboard", map[string]any{
+		"name": display_name,
+	})
+
+	var newResp NewLeaderboardResponseBody
+	json.Unmarshal(resp.Body.Bytes(), &newResp)
+	assert.Equal(t, display_name, newResp.Name)
+
+	id := newResp.Id
+	assert.Equal(t, 200, resp.Code)
+
+	getNameResp := api.Get(fmt.Sprintf("/leaderboard/%s/name", id))
+
+	var lResp LeaderboardNameResponseBody
+	json.Unmarshal(getNameResp.Body.Bytes(), &lResp)
+
+	assert.Equal(t, display_name, lResp.Name)
+
+}
+
 func TestGetBadIDEmpty(t *testing.T) {
 	api := setupTestApi(t)
 	badID := ""
@@ -57,6 +81,7 @@ func TestGetBadIDTooLong(t *testing.T) {
 	_, getResp := getLeaderboard(api, badID)
 	assert.Equal(t, 422, getResp.Code)
 }
+
 func TestAddScores(t *testing.T) {
 	api := setupTestApi(t)
 
@@ -66,7 +91,6 @@ func TestAddScores(t *testing.T) {
 	assert.Equal(t, 200, resp.Code)
 	var newResp NewLeaderboardResponseBody
 	json.Unmarshal(resp.Body.Bytes(), &newResp)
-	fmt.Println("newResp", newResp)
 	assert.Equal(t, "test name", newResp.Name)
 
 	id := newResp.Id

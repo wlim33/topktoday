@@ -107,6 +107,7 @@ func (app *App) getLeaderboardName(ctx context.Context, input *struct {
 	LeaderboardIDParam
 }) (*LeaderboardNameResponse, error) {
 	leaderboard_id := app.s.Decode(input.ID)[0]
+
 	display_name, db_err := app.GetLeaderboardName(leaderboard_id)
 	if db_err != nil {
 		return nil, db_err
