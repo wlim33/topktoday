@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
@@ -32,6 +31,58 @@ var CLI = ""
 var DOCS = ""
 var id_length = 9
 
+type IDParser struct {
+	submissions  *sqids.Sqids
+	leaderboards *sqids.Sqids
+}
+
+func NewParser() IDParser {
+	var p IDParser
+	if s, err := sqids.New(sqids.Options{
+		Alphabet:  "k3G7QAe51FCsPW92uEOyq4Bg6Sp8YzVTmnU0liwDdHXLajZrfxNhobJIRcMvKt",
+		MinLength: uint8(id_length)}); err != nil {
+		log.Fatalf("Failed to construct parser: %s", err)
+	} else {
+		p.submissions = s
+	}
+
+	if s, err := sqids.New(sqids.Options{
+		Alphabet:  "k3G7QAe51FCsPW92uEOyq4Bg6Sp8YzVTmnU0liwDdHXLajZrfxNhobJIRcMvKt",
+		MinLength: uint8(id_length)}); err != nil {
+
+		log.Fatalf("Failed to construct parser: %s", err)
+	} else {
+		p.leaderboards = s
+	}
+	return p
+}
+
+func (p IDParser) decodeSubmissionID(raw_id string) uint64 {
+	submission_id := p.submissions.Decode(raw_id)
+	return submission_id[0]
+}
+
+func (p IDParser) decodeLeaderboardID(raw_id string) uint64 {
+	leaderboard_id := p.leaderboards.Decode(raw_id)
+	return leaderboard_id[0]
+}
+
+func (p IDParser) encodeSubmissionID(id uint64) string {
+	raw, err := p.submissions.Encode([]uint64{id})
+	if err != nil {
+		log.Println("Parse error: %", err)
+	}
+	return raw
+}
+
+func (p IDParser) encodeLeaderboardID(id uint64) string {
+	raw, err := p.leaderboards.Encode([]uint64{id})
+	if err != nil {
+		log.Println("Parse error: %", err)
+	}
+	return raw
+}
+
 func OpenAPIGenConfig() huma.Config {
 	config := huma.DefaultConfig("leaderapi", VERSION)
 	url := "https://api.topktoday.dev"
@@ -52,19 +103,23 @@ type App struct {
 	*http.Server
 	projectID string
 	log       *logging.Logger
-	db        *sql.DB
-	s         *sqids.Sqids
+	st        Storage
+	parser    IDParser
 	api       huma.API
 }
 
 func (app *App) addRoutes(api huma.API) {
-
 	huma.Get(api, "/health", app.healthCheck)
-	huma.Get(api, "/leaderboard/{id}", app.getLeaderboard)
-	huma.Get(api, "/leaderboard/{id}", app.getLeaderboard)
-	huma.Get(api, "/leaderboard/{id}/name", app.getLeaderboardName)
-	huma.Post(api, "/leaderboard/{id}/score", app.postNewScore)
+	huma.Get(api, "/leaderboard/{leaderboard_id}", app.getLeaderboard)
+	huma.Get(api, "/leaderboard/{leaderboard_id}/name", app.getLeaderboardName)
 	huma.Post(api, "/leaderboard", app.postNewLeaderboard)
+
+	huma.Get(api, "/account/{user_id}/leaderboards", app.getAccountLeaderboards)
+	huma.Post(api, "/account/{user_id}/leaderboards/{leaderboard_id}", app.getAccountLeaderboards)
+
+	huma.Post(api, "/leaderboard/{leaderboard_id}/submission", app.postNewScore)
+	huma.Patch(api, "/leaderboard/{leaderboard_id}/submission/{submission_id}/score", app.updateSubmissionScore)
+	huma.Patch(api, "/leaderboard/{leaderboard_id}/submission/{submission_id}/verify", app.VerifyScore)
 	app.api = api
 }
 
@@ -79,20 +134,17 @@ func main() {
 
 	port, db_url := os.Getenv("PORT"), os.Getenv("DB_URL")
 	app := App{
-		log: &logging.Logger{},
+		log:    &logging.Logger{},
+		parser: NewParser(),
 	}
-	if s, err := sqids.New(sqids.Options{MinLength: uint8(id_length)}); err != nil {
-		log.Fatal(err)
-	} else {
-		app.s = s
-	}
+
 	r := chi.NewMux()
 
 	r.Use(cors.Handler(cors.Options{
 		// AllowedOrigins:   []string{"https://foo.com"}, // Use this to allow specific origin hosts
 		AllowedOrigins: []string{"https://*", "http://*"},
 		// AllowOriginFunc:  func(r *http.Request, origin string) bool { return true },
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "PATCH", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: false,
@@ -139,8 +191,8 @@ func main() {
 			port = "8080"
 			log.Printf("defaulting to port %s", port)
 		}
-		app.db = setupDB(db_url)
-		defer app.db.Close()
+		app.st = setupDB(db_url)
+		defer app.st.Close()
 	}
 	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatal(err)
