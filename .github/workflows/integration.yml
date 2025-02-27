@@ -12,6 +12,11 @@ jobs:
     env:
       POSTGRES_HOST: localhost
       POSTGRES_PORT: 5432
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
       DB_URL: 'postgres://postgres:postgres@localhost:5432/postgres'
     services:
       postgres:
@@ -27,7 +32,6 @@ jobs:
           - 5432:5432
     steps:
     - uses: actions/checkout@v4
-      
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
@@ -35,6 +39,9 @@ jobs:
 
     - name: Build
       run: go build -v ./...
+
+    - name: Build Test Database
+      run: psql -f init.sql
 
     - name: Test
       run: go test -v -tags=integration ./...
