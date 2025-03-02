@@ -47,7 +47,7 @@ func NewParser() IDParser {
 	}
 
 	if s, err := sqids.New(sqids.Options{
-		Alphabet:  "k3G7QAe51FCsPW92uEOyq4Bg6Sp8YzVTmnU0liwDdHXLajZrfxNhobJIRcMvKt",
+		Alphabet:  "liwDdHXLajZrfxNhobJIRcMvKtk3G7QAe51FCsPW92uEOyq4Bg6Sp8YzVTmnU0",
 		MinLength: uint8(id_length)}); err != nil {
 
 		log.Fatalf("Failed to construct parser: %s", err)
@@ -110,16 +110,24 @@ type App struct {
 
 func (app *App) addRoutes(api huma.API) {
 	huma.Get(api, "/health", app.healthCheck)
+
+	// Leaderboards
+	huma.Post(api, "/leaderboard", app.postNewLeaderboard)
 	huma.Get(api, "/leaderboard/{leaderboard_id}", app.getLeaderboard)
 	huma.Get(api, "/leaderboard/{leaderboard_id}/name", app.getLeaderboardName)
-	huma.Post(api, "/leaderboard", app.postNewLeaderboard)
+	huma.Get(api, "/leaderboard/{leaderboard_id}/verifiers", app.getLeaderboardVerifiers)
 
-	huma.Get(api, "/account/{user_id}/leaderboards", app.getAccountLeaderboards)
-	huma.Post(api, "/account/{user_id}/leaderboards/{leaderboard_id}", app.getAccountLeaderboards)
-
+	// Submissions
 	huma.Post(api, "/leaderboard/{leaderboard_id}/submission", app.postNewScore)
-	huma.Patch(api, "/leaderboard/{leaderboard_id}/submission/{submission_id}/score", app.updateSubmissionScore)
+	huma.Get(api, "/leaderboard/{leaderboard_id}/submission/{submission_id}", app.getSubmission)
+	huma.Patch(api, "/leaderboard/{leaderboard_id}/submission/{submission_id}/score", app.updateSubmission)
 	huma.Patch(api, "/leaderboard/{leaderboard_id}/submission/{submission_id}/verify", app.VerifyScore)
+
+	// Accounts
+	huma.Get(api, "/account/{user_id}/leaderboards", app.getAccountLeaderboards)
+	huma.Get(api, "/account/{user_id}/submissions", app.getAccountSubmissions)
+	huma.Post(api, "/account/link_anonymous", app.linkAnonymousAccount)
+
 	app.api = api
 }
 
@@ -191,7 +199,7 @@ func main() {
 			port = "8080"
 			log.Printf("defaulting to port %s", port)
 		}
-		app.st = setupDB(db_url)
+		app.st = setupDB(context.Background(), db_url)
 		defer app.st.Close()
 	}
 	if err := http.ListenAndServe(":"+port, r); err != nil {
