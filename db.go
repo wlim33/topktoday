@@ -26,7 +26,7 @@ type Ranking struct {
 type User struct {
 	ID        string    `json:"id"`
 	Username  string    `json:"username" example:"greensuigi" doc:"Submitter username."`
-	TimeAdded time.Time `json:"added_at,omitempty"`
+	TimeAdded time.Time `json:"added_at"`
 }
 
 type LeaderboardInfo struct {
@@ -34,7 +34,7 @@ type LeaderboardInfo struct {
 
 	ID          string    `json:"id"`
 	Title       string    `json:"title" example:"My First Leaderboard" doc:"Leaderboard title for associated submission."`
-	Verifiers   []User    `json:"verifiers"`
+	Verifiers   []User    `json:"verifiers,omitempty"`
 	TimeCreated time.Time `json:"created_at"`
 }
 
@@ -42,12 +42,12 @@ type DetailedSubmission struct {
 	rawID            int
 	rawLeaderboardID int
 
-	Link                   string    `json:"link" example:"https://www.youtube.com/watch?v=rdx0TPjX1qE" doc:"Latest link for this submission."`
+	Link                   string    `json:"link,omitempty" example:"https://www.youtube.com/watch?v=rdx0TPjX1qE" doc:"Latest link for this submission."`
 	ID                     string    `json:"id,omitempty"`
 	Score                  int       `json:"score" example:"12" doc:"Current score of submission."`
 	LeaderboardID          string    `json:"leaderboard_id" example:"EfhxLZ9ck" doc:"9 character leaderboard ID used for querying."`
 	LeaderboardDisplayName string    `json:"leaderboard_title" example:"My First Leaderboard" doc:"Leaderboard title for associated submission."`
-	Submitter              User      `json:"submitted_by"`
+	Submitter              *User     `json:"submitted_by,omitempty"`
 	TimeCreated            time.Time `json:"last_submitted"`
 	Verified               bool      `json:"verified" example:"true" doc:"Current verification status."`
 }
@@ -163,7 +163,7 @@ func (st Storage) getSubmissionInfo(ctx context.Context, leaderboard uint64, sub
 	if err != nil {
 		return submissionInfo, err
 	}
-	submissionInfo.Submitter = submitter
+	submissionInfo.Submitter = &submitter
 	return submissionInfo, nil
 }
 
@@ -280,6 +280,7 @@ func (st Storage) getUserSubmissions(ctx context.Context, user_id string) ([]Det
 		FROM submissions
 		LEFT JOIN leaderboards
 		ON submissions.leaderboard=leaderboards.id
+		WHERE submissions.userid=$1
 		ORDER BY 
 			created_at DESC
 		LIMIT 25

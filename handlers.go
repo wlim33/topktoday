@@ -62,27 +62,6 @@ func (app *App) getLeaderboard(ctx context.Context, input *struct {
 	return resp, nil
 }
 
-func (app *App) getAccountLeaderboards(ctx context.Context, input *struct {
-	UserIDParam
-}) (*AccountLeaderboardsResponse, error) {
-	leaderboards, db_err := app.st.getUserLeaderboards(ctx, input.UserID)
-	if db_err != nil {
-		return nil, db_err
-	}
-
-	for i := range len(leaderboards) {
-		leaderboards[i].ID = app.parser.encodeLeaderboardID(uint64(leaderboards[i].rawID))
-
-	}
-
-	resp := &AccountLeaderboardsResponse{
-		Body: AccountLeaderboardsResponseBody{
-			leaderboards,
-		},
-	}
-	return resp, nil
-}
-
 func (app *App) getSubmission(ctx context.Context, input *struct {
 	LeaderboardIDParam
 	SubmissionIDParam
@@ -185,6 +164,27 @@ func (app *App) getLeaderboardName(ctx context.Context, input *struct {
 
 	resp := &LeaderboardNameResponse{}
 	resp.Body.Name = display_name
+	return resp, nil
+}
+
+func (app *App) getAccountLeaderboards(ctx context.Context, input *struct {
+	UserIDParam
+}) (*AccountLeaderboardsResponse, error) {
+	leaderboards, db_err := app.st.getUserLeaderboards(ctx, input.UserID)
+	if db_err != nil {
+		return nil, db_err
+	}
+
+	for i := range len(leaderboards) {
+		leaderboards[i].ID = app.parser.encodeLeaderboardID(uint64(leaderboards[i].rawID))
+
+	}
+
+	resp := &AccountLeaderboardsResponse{
+		Body: AccountLeaderboardsResponseBody{
+			leaderboards,
+		},
+	}
 	return resp, nil
 }
 
