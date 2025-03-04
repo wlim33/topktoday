@@ -11,7 +11,13 @@ func (app *App) postNewLeaderboard(ctx context.Context, input *struct {
 	NewLeaderboardBody
 	UserIDHeader
 }) (*NewLeaderboardResponse, error) {
-	raw_id, name, db_err := app.st.newLeaderboard(ctx, input.Body.DisplayName, input.UserID)
+	// if customer, ok := ctx.Value(CUSTOMER_CONTEXT_KEY).(*CustomerInfo); ok {
+	// 	fmt.Println(customer)
+	// } else {
+	// 	fmt.Println("customer not found in handler")
+	// }
+
+	raw_id, db_err := app.st.newLeaderboard(ctx, input.UserID, input.Body)
 	if db_err != nil {
 		return nil, db_err
 	}
@@ -20,7 +26,6 @@ func (app *App) postNewLeaderboard(ctx context.Context, input *struct {
 		app.parser.encodeLeaderboardID(raw_id)
 	resp := &NewLeaderboardResponse{}
 	resp.Body.Id = leaderboard_id
-	resp.Body.Name = name
 	return resp, db_err
 }
 

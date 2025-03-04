@@ -28,12 +28,15 @@ func TestDisplayName(t *testing.T) {
 	resp := api.Post("/leaderboard",
 		"UserID: testid",
 		map[string]any{
-			"name": display_name,
+			"title":             display_name,
+			"duration":          "00:01:00",
+			"highest_first":     true,
+			"is_time":           true,
+			"uses_verification": true,
 		})
 
 	var newResp NewLeaderboardResponseBody
 	json.Unmarshal(resp.Body.Bytes(), &newResp)
-	assert.Equal(t, display_name, newResp.Name)
 
 	id := newResp.Id
 	assert.Equal(t, 200, resp.Code)
@@ -67,18 +70,45 @@ func TestGetBadIDTooLong(t *testing.T) {
 	assert.Equal(t, 422, getResp.Code)
 }
 
+func TestNewLeaderboard(t *testing.T) {
+	api := setupTestApi(t)
+
+	resp := api.Post("/leaderboard",
+		"UserID: testid",
+		map[string]any{
+			"title":             "My First Leaderboard",
+			"duration":          "00:01:00",
+			"highest_first":     true,
+			"is_time":           true,
+			"uses_verification": true,
+		})
+	assert.Equal(t, 200, resp.Code)
+	var newResp NewLeaderboardResponseBody
+	json.Unmarshal(resp.Body.Bytes(), &newResp)
+
+	id := newResp.Id
+
+	if lResp, getResp := getLeaderboard(api, id); assert.Equal(t, 200, getResp.Code) {
+		assert.Zero(t, len(lResp.Scores))
+	}
+
+}
+
 func TestAddScores(t *testing.T) {
 	api := setupTestApi(t)
 
 	resp := api.Post("/leaderboard",
 		"UserID: testid",
 		map[string]any{
-			"name": "test name",
+			"title":             "My First Leaderboard",
+			"duration":          "00:01:00",
+			"highest_first":     true,
+			"is_time":           true,
+			"uses_verification": true,
 		})
 	assert.Equal(t, 200, resp.Code)
 	var newResp NewLeaderboardResponseBody
 	json.Unmarshal(resp.Body.Bytes(), &newResp)
-	assert.Equal(t, "test name", newResp.Name)
 
 	id := newResp.Id
 

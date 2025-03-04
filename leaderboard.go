@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"fmt"
+	"hash"
 	"log"
 	"net/http"
 	"os"
@@ -101,18 +104,24 @@ func OpenAPIGenConfig() huma.Config {
 
 type App struct {
 	*http.Server
-	projectID string
-	log       *logging.Logger
-	st        Storage
-	parser    IDParser
-	api       huma.API
+	projectID   string
+	log         *logging.Logger
+	st          Storage
+	parser      IDParser
+	api         huma.API
+	webhookHash hash.Hash
 }
 
 func (app *App) addRoutes(api huma.API) {
 	huma.Get(api, "/health", app.healthCheck)
 
 	// Leaderboards
-	huma.Post(api, "/leaderboard", app.postNewLeaderboard)
+	huma.Register(api, huma.Operation{
+		OperationID: "new-leaderboard",
+		Method:      http.MethodPost,
+		Path:        "/leaderboard",
+		Middlewares: huma.Middlewares{app.CustomerMiddleware},
+	}, app.postNewLeaderboard)
 	huma.Get(api, "/leaderboard/{leaderboard_id}", app.getLeaderboard)
 	huma.Get(api, "/leaderboard/{leaderboard_id}/name", app.getLeaderboardName)
 	huma.Get(api, "/leaderboard/{leaderboard_id}/verifiers", app.getLeaderboardVerifiers)
@@ -128,6 +137,15 @@ func (app *App) addRoutes(api huma.API) {
 	huma.Get(api, "/account/{user_id}/submissions", app.getAccountSubmissions)
 	huma.Post(api, "/account/link_anonymous", app.linkAnonymousAccount)
 
+	// Webhooks
+
+	huma.Register(api, huma.Operation{
+		OperationID: "new-leaderboard",
+		Method:      http.MethodPost,
+		Path:        "/webhooks/lemon_squeezy",
+		Hidden:      true,
+	}, app.lemonPost)
+
 	app.api = api
 }
 
@@ -139,11 +157,11 @@ type Options struct {
 
 func main() {
 	log.Printf("app version: %s", VERSION)
-
-	port, db_url := os.Getenv("PORT"), os.Getenv("DB_URL")
+	port, db_url, ls_secret := os.Getenv("PORT"), os.Getenv("DB_URL"), os.Getenv("LS_SECRET")
 	app := App{
-		log:    &logging.Logger{},
-		parser: NewParser(),
+		log:         &logging.Logger{},
+		parser:      NewParser(),
+		webhookHash: hmac.New(sha256.New, []byte(ls_secret)),
 	}
 
 	r := chi.NewMux()
@@ -153,7 +171,7 @@ func main() {
 		AllowedOrigins: []string{"https://*", "http://*"},
 		// AllowOriginFunc:  func(r *http.Request, origin string) bool { return true },
 		AllowedMethods:   []string{"GET", "PATCH", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Signature", "X-Event-Name"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: false,
 		MaxAge:           300, // Maximum value not ignored by any of major browsers
@@ -199,6 +217,7 @@ func main() {
 			port = "8080"
 			log.Printf("defaulting to port %s", port)
 		}
+
 		app.st = setupDB(context.Background(), db_url)
 		defer app.st.Close()
 	}

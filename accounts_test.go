@@ -33,27 +33,33 @@ func TestGetUserLeaderboards(t *testing.T) {
 	resp := api.Post("/leaderboard",
 		"UserID: testid",
 		map[string]any{
-			"name": "test name",
+			"title":             "My First Leaderboard",
+			"duration":          "00:01:00",
+			"highest_first":     true,
+			"is_time":           true,
+			"uses_verification": true,
 		})
 	assert.Equal(t, 200, resp.Code)
 	var newResp NewLeaderboardResponseBody
 	json.Unmarshal(resp.Body.Bytes(), &newResp)
-	assert.Equal(t, "test name", newResp.Name)
 
 	if lResp, getResp := getAccountLeaderboards(api, "testid"); assert.Equal(t, 200, getResp.Code) {
 		assert.Equal(t, 1, len(lResp.Leaderboards))
-		assert.Equal(t, "test name", lResp.Leaderboards[0].Title)
+		assert.Equal(t, "My First Leaderboard", lResp.Leaderboards[0].Title)
 	}
 
 	resp2 := api.Post("/leaderboard",
 		"UserID: testid",
 		map[string]any{
-			"name": "test name 2",
+			"title":             "My Second Leaderboard",
+			"duration":          "00:01:00",
+			"highest_first":     true,
+			"is_time":           true,
+			"uses_verification": true,
 		})
 	assert.Equal(t, 200, resp2.Code)
 	var newResp2 NewLeaderboardResponseBody
 	json.Unmarshal(resp2.Body.Bytes(), &newResp2)
-	assert.Equal(t, "test name 2", newResp2.Name)
 
 	if lResp, getResp := getAccountLeaderboards(api, "testid"); assert.Equal(t, 200, getResp.Code) {
 		assert.Equal(t, 2, len(lResp.Leaderboards))
@@ -66,12 +72,15 @@ func TestGetUserSubmissions(t *testing.T) {
 	resp := api.Post("/leaderboard",
 		"UserID: testid",
 		map[string]any{
-			"name": "test name",
+			"title":             "My First Leaderboard",
+			"duration":          "00:01:00",
+			"highest_first":     true,
+			"is_time":           true,
+			"uses_verification": true,
 		})
 	assert.Equal(t, 200, resp.Code)
 	var newResp NewLeaderboardResponseBody
 	json.Unmarshal(resp.Body.Bytes(), &newResp)
-	assert.Equal(t, "test name", newResp.Name)
 
 	subResp := api.Post(
 		fmt.Sprintf("/leaderboard/%s/submission", newResp.Id),
@@ -111,12 +120,15 @@ func TestLinkAnonymousAccount(t *testing.T) {
 	resp := api.Post("/leaderboard",
 		"UserID: anon",
 		map[string]any{
-			"name": "test name",
+			"title":             "My First Leaderboard",
+			"duration":          "00:01:00",
+			"highest_first":     true,
+			"is_time":           true,
+			"uses_verification": true,
 		})
 	assert.Equal(t, 200, resp.Code)
 	var newResp NewLeaderboardResponseBody
 	json.Unmarshal(resp.Body.Bytes(), &newResp)
-	assert.Equal(t, "test name", newResp.Name)
 
 	id := newResp.Id
 
@@ -145,7 +157,6 @@ func TestLinkAnonymousAccount(t *testing.T) {
 
 	if lResp, getResp := getLeaderboard(api, id); assert.Equal(t, 200, getResp.Code) {
 		assert.Equal(t, 1, len(lResp.Scores))
-		assert.Equal(t, "testid", lResp.Scores[0].User.ID)
 		assert.Equal(t, "testid", lResp.Scores[0].User.ID)
 	}
 }

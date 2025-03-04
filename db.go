@@ -3,11 +3,20 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
+
+type LeaderboardConfig struct {
+	Duration         *string `json:"duration,omitempty" format:"time" example:"1\:00" doc:"Time after creation when the leaderboard stops accepting submissions. Don't include if you want the leaderboard to always accept submissions"`
+	Title            string  `json:"title" example:"My First Leaderboard" doc:"Leaderboard title"`
+	HighestFirst     bool    `json:"highest_first" example:"true" doc:"If true, higher scores/times are ranked higher, e.g. highest score is first, second highest is second."`
+	IsTime           bool    `json:"is_time" example:"false" doc:"If true, leaderboards scores are time values, e.g. 32 seconds"`
+	UsesVerification bool    `json:"uses_verification" example:"true" doc:"If true, scores need to be verified before they are shown on the main leaderboard."`
+}
 
 type Storage struct {
 	db *pgxpool.Pool
@@ -61,42 +70,14 @@ func setupDB(ctx context.Context, connURL string) Storage {
 
 	}
 
-	db.Exec(ctx, `DROP TABLE IF EXISTS leaderboards, submissions, owners, verifiers`)
+	db.Exec(ctx, `DROP TABLE IF EXISTS leaderboards, submissions, verifiers, customers`)
 
-	_, err = db.Exec(ctx, `CREATE TABLE leaderboards (
-		id INT GENERATED ALWAYS AS IDENTITY UNIQUE,
-		created_by TEXT REFERENCES "user"(id),
-		display_name TEXT,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		PRIMARY KEY(id, created_by)
-	)`)
-
-	if err != nil {
+	c, file_err := os.ReadFile("init.sql")
+	if file_err != nil {
 		log.Fatal(err)
 	}
 
-	_, err = db.Exec(ctx, `CREATE TABLE submissions (
-		id INT GENERATED ALWAYS AS IDENTITY UNIQUE,
-		leaderboard INT REFERENCES leaderboards(id),
-		userid TEXT REFERENCES "user"(id),
-		link TEXT,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		score NUMERIC NOT NULL,
-		verified BOOLEAN NOT NULL DEFAULT FALSE,
-		PRIMARY KEY(id, leaderboard, userid)
-	)`)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = db.Exec(ctx, `CREATE TABLE verifiers (
-		leaderboard INT REFERENCES leaderboards(id),
-		userid TEXT REFERENCES "user"(id),
-		added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		PRIMARY KEY(leaderboard, userid)
-	)`)
-
+	_, err = db.Exec(ctx, string(c))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -107,24 +88,24 @@ func (st Storage) Close() {
 	st.db.Close()
 }
 
-func (st Storage) newLeaderboard(ctx context.Context, display_name string, user_id string) (uint64, string, error) {
+func (st Storage) newLeaderboard(ctx context.Context, user_id string, config LeaderboardConfig) (uint64, error) {
 	row := st.db.QueryRow(ctx, `
 		WITH ins_leaderboard AS (
-			INSERT INTO leaderboards(display_name, created_by) 
-			VALUES ($1, $2)
+			INSERT INTO leaderboards(created_by, display_name, highest_first, is_time, duration, uses_verification) 
+			VALUES ($1, $2, $3, $4, $5, $6)
 			RETURNING id
 		)
 		INSERT INTO verifiers(leaderboard, userid)
-		SELECT id, $2
+		SELECT id, $1
 		FROM ins_leaderboard
 		RETURNING verifiers.leaderboard
-		`, display_name, user_id)
+		`, user_id, config.Title, config.HighestFirst, config.IsTime, config.Duration, config.UsesVerification)
 	var leaderboard_id int
 	err := row.Scan(&leaderboard_id)
 	if err != nil {
 		log.Println(err)
 	}
-	return uint64(leaderboard_id), display_name, err
+	return uint64(leaderboard_id), err
 }
 
 func (st Storage) verifyScore(ctx context.Context, leaderboard uint64, submission uint64, owner string, is_valid bool) (uint64, error) {
@@ -350,7 +331,7 @@ func (st Storage) linkAccounts(ctx context.Context, anon_id string, user_id stri
 	_, tx_err := tx.Exec(ctx, `
 		UPDATE verifiers
 		SET userid=$2
-		WHERE userid=$1 AND EXISTS(SELECT 1 FROM "user" WHERE id=$1 AND "isAnonymous"=true)
+		WHERE userid=$1 AND EXISTS(SELECT 1 FROM "user" WHERE id=$1 AND "isAnonymous"=TRUE)
 		`, anon_id, user_id)
 	if tx_err != nil {
 		return tx_err
@@ -359,7 +340,7 @@ func (st Storage) linkAccounts(ctx context.Context, anon_id string, user_id stri
 	_, tx_err = tx.Exec(ctx, `
 		UPDATE leaderboards
 		SET created_by=$2
-		WHERE created_by=$1 AND EXISTS(SELECT 1 FROM "user" WHERE id=$1 AND "isAnonymous"=true)
+		WHERE created_by=$1 AND EXISTS(SELECT 1 FROM "user" WHERE id=$1 AND "isAnonymous"=TRUE)
 		`, anon_id, user_id)
 	if tx_err != nil {
 		return tx_err
@@ -368,7 +349,16 @@ func (st Storage) linkAccounts(ctx context.Context, anon_id string, user_id stri
 	_, tx_err = tx.Exec(ctx, `
 		UPDATE submissions
 		SET userid=$2
-		WHERE userid=$1 AND EXISTS(SELECT 1 FROM "user" WHERE id=$1 AND "isAnonymous"=true)
+		WHERE userid=$1 AND EXISTS(SELECT 1 FROM "user" WHERE id=$1 AND "isAnonymous"=TRUE)
+		`, anon_id, user_id)
+	if tx_err != nil {
+		return tx_err
+	}
+
+	_, tx_err = tx.Exec(ctx, `
+		UPDATE customers
+		SET userid=$2
+		WHERE userid=$1 AND EXISTS(SELECT 1 FROM "user" WHERE id=$1 AND "isAnonymous"=TRUE)
 		`, anon_id, user_id)
 	if tx_err != nil {
 		return tx_err
@@ -378,11 +368,58 @@ func (st Storage) linkAccounts(ctx context.Context, anon_id string, user_id stri
 	return commit_err
 }
 
-func (st Storage) createTestUser(ctx context.Context, id string, name string, email string, is_anonymous bool) error {
+func (st Storage) createTestUser(ctx context.Context, id string, name string, email string, is_anonymous bool, customer_info CustomerInfo) error {
 	_, err := st.db.Exec(ctx, `
-		INSERT INTO "user"(id, name, email, "emailVerified", "createdAt", "updatedAt", "isAnonymous")
-		VALUES ($1, $2, $3, FALSE, NOW(), NOW(), $4)
+		WITH first AS (
+			INSERT INTO "user"(id, name, email, "emailVerified", "createdAt", "updatedAt", "isAnonymous")
+			VALUES ($1, $2, $3, FALSE, NOW(), NOW(), $4)
+			ON CONFLICT DO NOTHING
+		)
+		INSERT INTO customers(userid, customer_id)
+		VALUES ($1, $5)
 		ON CONFLICT DO NOTHING;
-		`, id, name, email, is_anonymous)
+		`, id, name, email, is_anonymous, customer_info.id)
+	return err
+}
+
+func (st Storage) getCustomer(ctx context.Context, id string) (CustomerInfo, error) {
+	row := st.db.QueryRow(ctx, `
+		SELECT customer_id, status
+		FROM customers
+		WHERE userid=$1
+		`, id)
+
+	var customer CustomerInfo
+	err := row.Scan(&customer.id, &customer.status)
+	if err != nil {
+		return customer, err
+	}
+	return customer, nil
+}
+
+func (st Storage) updateSubscription(ctx context.Context, user_id string, attributes *CustomerAttributes) error {
+	_, err := st.db.Exec(ctx, `
+		INSERT INTO customers(userid, customer_id, order_id, order_item_id, product_id, variant_id, user_name, user_email, status, status_formatted)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		ON CONFLICT (userid, customer_id) DO UPDATE 
+		SET 
+			order_id = excluded.order_id, 
+			order_item_id = excluded.order_item_id, 
+			product_id = excluded.product_id, 
+			variant_id = excluded.variant_id, 
+			user_name = excluded.user_name, 
+			user_email = excluded.user_email, 
+			status = excluded.status, 
+			status_formatted = excluded.status_formatted
+		`, user_id,
+		attributes.CustomerID,
+		attributes.OrderID,
+		attributes.OrderItemID,
+		attributes.ProductID,
+		attributes.VariantID,
+		attributes.CustomerName,
+		attributes.Status,
+		attributes.StatusFormatted)
+
 	return err
 }
