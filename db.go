@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"log"
-	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
+
+	_ "embed"
 )
 
 type LeaderboardConfig struct {
@@ -61,6 +62,9 @@ type DetailedSubmission struct {
 	Verified               bool      `json:"verified" example:"true" doc:"Current verification status."`
 }
 
+//go:embed init.sql
+var init_file string
+
 func setupDB(ctx context.Context, connURL string) Storage {
 	db, err := pgxpool.New(ctx, connURL)
 	if err != nil {
@@ -72,12 +76,7 @@ func setupDB(ctx context.Context, connURL string) Storage {
 
 	db.Exec(ctx, `DROP TABLE IF EXISTS leaderboards, submissions, verifiers, customers`)
 
-	c, file_err := os.ReadFile("init.sql")
-	if file_err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = db.Exec(ctx, string(c))
+	_, err = db.Exec(ctx, init_file)
 	if err != nil {
 		log.Fatal(err)
 	}
