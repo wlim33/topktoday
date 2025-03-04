@@ -26,12 +26,15 @@ func TestGetSubmissionInfo(t *testing.T) {
 	resp := api.Post("/leaderboard",
 		"UserID: testid",
 		map[string]any{
-			"name": "test name",
+			"title":             "My First Leaderboard",
+			"duration":          "00:01:00",
+			"highest_first":     true,
+			"is_time":           true,
+			"uses_verification": true,
 		})
 	assert.Equal(t, 200, resp.Code)
 	var newResp NewLeaderboardResponseBody
 	json.Unmarshal(resp.Body.Bytes(), &newResp)
-	assert.Equal(t, "test name", newResp.Name)
 
 	postResp2 := api.Post(
 		fmt.Sprintf("/leaderboard/%s/submission", newResp.Id),
@@ -51,7 +54,7 @@ func TestGetSubmissionInfo(t *testing.T) {
 		assert.Equal(t, "www.youtube.com", submitInfo.Link)
 		assert.Equal(t, "testid2", submitInfo.Submitter.ID)
 		assert.Equal(t, newResp.Id, submitInfo.LeaderboardID)
-		assert.Equal(t, "test name", submitInfo.LeaderboardDisplayName)
+		assert.Equal(t, "My First Leaderboard", submitInfo.LeaderboardDisplayName)
 		assert.False(t, submitInfo.Verified)
 	}
 }
@@ -62,12 +65,15 @@ func TestUpdateSubmissionBecomesUnverified(t *testing.T) {
 	resp := api.Post("/leaderboard",
 		"UserID: testid",
 		map[string]any{
-			"name": "test name",
+			"title":             "My First Leaderboard",
+			"duration":          "00:01:00",
+			"highest_first":     true,
+			"is_time":           true,
+			"uses_verification": true,
 		})
 	assert.Equal(t, 200, resp.Code)
 	var newResp NewLeaderboardResponseBody
 	json.Unmarshal(resp.Body.Bytes(), &newResp)
-	assert.Equal(t, "test name", newResp.Name)
 
 	postResp2 := api.Post(
 		fmt.Sprintf("/leaderboard/%s/submission", newResp.Id),
@@ -126,12 +132,15 @@ func TestVerifyScoreNotOwner(t *testing.T) {
 	resp := api.Post("/leaderboard",
 		"UserID: testid",
 		map[string]any{
-			"name": "test name",
+			"title":             "My First Leaderboard",
+			"duration":          "00:01:00",
+			"highest_first":     true,
+			"is_time":           true,
+			"uses_verification": true,
 		})
 	assert.Equal(t, 200, resp.Code)
 	var newResp NewLeaderboardResponseBody
 	json.Unmarshal(resp.Body.Bytes(), &newResp)
-	assert.Equal(t, "test name", newResp.Name)
 
 	postResp2 := api.Post(
 		fmt.Sprintf("/leaderboard/%s/submission", newResp.Id),
@@ -167,12 +176,15 @@ func TestVerifyScore(t *testing.T) {
 	resp := api.Post("/leaderboard",
 		"UserID: testid",
 		map[string]any{
-			"name": "test name",
+			"title":             "My First Leaderboard",
+			"duration":          "00:01:00",
+			"highest_first":     true,
+			"is_time":           true,
+			"uses_verification": true,
 		})
 	assert.Equal(t, 200, resp.Code)
 	var newResp NewLeaderboardResponseBody
 	json.Unmarshal(resp.Body.Bytes(), &newResp)
-	assert.Equal(t, "test name", newResp.Name)
 
 	postResp2 := api.Post(
 		fmt.Sprintf("/leaderboard/%s/submission", newResp.Id),
@@ -214,12 +226,15 @@ func TestUpdateScore(t *testing.T) {
 	resp := api.Post("/leaderboard",
 		"UserID: testid",
 		map[string]any{
-			"name": "test name",
+			"title":             "My First Leaderboard",
+			"duration":          "00:01:00",
+			"highest_first":     true,
+			"is_time":           true,
+			"uses_verification": true,
 		})
 	assert.Equal(t, 200, resp.Code)
 	var newResp NewLeaderboardResponseBody
 	json.Unmarshal(resp.Body.Bytes(), &newResp)
-	assert.Equal(t, "test name", newResp.Name)
 
 	id := newResp.Id
 
@@ -263,7 +278,7 @@ func TestUpdateScore(t *testing.T) {
 		assert.Equal(t, "www.youtube.com/1", submitInfo.Link)
 		assert.Equal(t, "testid2", submitInfo.Submitter.ID)
 		assert.Equal(t, id, submitInfo.LeaderboardID)
-		assert.Equal(t, "test name", submitInfo.LeaderboardDisplayName)
+		assert.Equal(t, "My First Leaderboard", submitInfo.LeaderboardDisplayName)
 		assert.False(t, submitInfo.Verified)
 	}
 }

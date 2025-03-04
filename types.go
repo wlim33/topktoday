@@ -38,9 +38,7 @@ type LinkAnonymousBody struct {
 }
 
 type NewLeaderboardBody struct {
-	Body struct {
-		DisplayName string `json:"name" example:"My Fist Leaderboard" doc:"Leaderboard display name"`
-	}
+	Body LeaderboardConfig
 }
 type MessageResponseBody struct {
 	Message string `json:"message" example:"All systems go!" doc:"Human readable message."`
@@ -50,8 +48,7 @@ type ErrorResponse struct {
 }
 
 type NewLeaderboardResponseBody struct {
-	Id   string `json:"id" example:"EfhxLZ9ck" minLength:"9" maxLength:"9" doc:"9 character leaderboard ID used for querying."`
-	Name string `json:"name" example:"My First Leaderboard" doc:"Leaderboard display name."`
+	Id string `json:"id" example:"EfhxLZ9ck" minLength:"9" maxLength:"9" doc:"9 character leaderboard ID used for querying."`
 }
 
 type LeaderboardVerifiersResponse struct {
