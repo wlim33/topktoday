@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/hmac"
+	"encoding/hex"
 	"encoding/json"
 	"log"
 )
@@ -47,7 +48,8 @@ func (app *App) lemonPost(ctx context.Context, input *WebhookInput) (*WebhookRes
 		return &WebhookResponse{Status: 422}, nil
 	}
 	app.webhookHash.Write(input.RawBody)
-	if !hmac.Equal(app.webhookHash.Sum(nil), []byte(input.Signature)) {
+
+	if !hmac.Equal([]byte(hex.EncodeToString(app.webhookHash.Sum(nil))), []byte(input.Signature)) {
 		log.Println("signature hash not valid")
 		return &WebhookResponse{Status: 422}, nil
 	}
