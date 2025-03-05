@@ -1,5 +1,7 @@
 package main
 
+import "time"
+
 type NotAuthorizedResponse struct {
 	Status int
 	Body   MessageResponse
@@ -82,7 +84,9 @@ type LeaderboardResponseBody struct {
 }
 
 type LeaderboardResponse struct {
-	Body LeaderboardResponseBody
+	Status       int
+	LastModified time.Time `header:"Last-Modified"`
+	Body         *LeaderboardResponseBody
 }
 
 type MessageResponse struct {

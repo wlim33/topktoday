@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -28,9 +31,55 @@ func (app *App) CustomerMiddleware(ctx huma.Context, next func(huma.Context)) {
 		ctx = huma.WithValue(ctx, CUSTOMER_CONTEXT_KEY, &customer)
 
 		next(ctx)
-	}
-	// Set a custom header on the response.
 
-	// Call the next middleware in the chain. This eventually calls the
-	// operation handler as well.
+	}
+}
+
+func (app *App) getUsage(ctx context.Context, subscription_id int) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("https://api.lemonsqueezy.com/v1/subscription-items/%d/current-usage", subscription_id), nil)
+
+	req.Header.Set("Accept", "application/vnd.api+json")
+	req.Header.Set("Content-Type", "application/vnd.api+json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", app.lsApiKey))
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+func (app *App) sendUsageUpdate(subscription_id int, amount int) error {
+	body := []byte(fmt.Sprintf(`{
+    "data": {
+      "type": "usage-records",
+      "attributes": {
+        "quantity": %d
+      },
+	  "relationships": {
+		"subscription-item": {
+		  "data": {
+            "type": "subscription-items",
+            "id": "%d"
+          }		
+		}
+	  }
+    }
+  }`, amount, subscription_id))
+	req, err := http.NewRequest(http.MethodPost, "https://api.lemonsqueezy.com/v1/usage-records", bytes.NewBuffer(body))
+
+	req.Header.Set("Accept", "application/vnd.api+json")
+	req.Header.Set("Content-Type", "application/vnd.api+json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", app.lsApiKey))
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+	return nil
 }

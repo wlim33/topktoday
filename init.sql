@@ -26,12 +26,16 @@ CREATE TABLE IF NOT EXISTS leaderboards (
 	created_by TEXT REFERENCES "user"(id) ON UPDATE CASCADE,
 	display_name TEXT,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
 	highest_first BOOLEAN NOT NULL DEFAULT TRUE,
 	is_time BOOLEAN NOT NULL DEFAULT FALSE,
 	uses_verification BOOLEAN NOT NULL DEFAULT FALSE,
 	duration INTERVAL,
+	start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	multiple_submissions BOOLEAN DEFAULT TRUE,
 	PRIMARY KEY(id, created_by)
 );
+
 
 
 CREATE TABLE IF NOT EXISTS submissions (
@@ -42,6 +46,7 @@ CREATE TABLE IF NOT EXISTS submissions (
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	score NUMERIC NOT NULL,
 	verified BOOLEAN NOT NULL DEFAULT FALSE,
+	last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
 	PRIMARY KEY(id, leaderboard, userid)
 );
 
@@ -52,3 +57,20 @@ CREATE TABLE IF NOT EXISTS verifiers (
 	added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	PRIMARY KEY(leaderboard, userid)
 );
+
+
+CREATE OR REPLACE FUNCTION function_update_timestamp() RETURNS TRIGGER AS
+$BODY$
+BEGIN
+	UPDATE leaderboards SET last_updated=NOW() WHERE NEW.leaderboard=leaderboards.id;
+        RETURN NEW;
+END;
+$BODY$
+language plpgsql;
+
+
+CREATE TRIGGER trig_update_time
+     AFTER INSERT OR UPDATE ON submissions
+     FOR EACH ROW
+     EXECUTE FUNCTION function_update_timestamp();
+
