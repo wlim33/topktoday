@@ -140,10 +140,11 @@ func (app *App) addRoutes(api huma.API) {
 	// Webhooks
 
 	huma.Register(api, huma.Operation{
-		OperationID: "new-leaderboard",
-		Method:      http.MethodPost,
-		Path:        "/webhooks/lemon_squeezy",
-		Hidden:      true,
+		OperationID:        "webhook",
+		Method:             http.MethodPost,
+		Path:               "/webhooks/lemon_squeezy",
+		SkipValidateParams: true,
+		Hidden:             true,
 	}, app.lemonPost)
 
 	app.api = api

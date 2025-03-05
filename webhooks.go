@@ -14,35 +14,47 @@ type WebhookCustomData struct {
 	UserID string `json:"user_id"`
 }
 type CustomerAttributes struct {
-	CustomerID      json.Number `json:"customer_id"`
-	OrderID         json.Number `json:"order_id"`
-	OrderItemID     json.Number `json:"order_item_id"`
-	ProductID       json.Number `json:"product_id"`
-	VariantID       json.Number `json:"variant_id"`
-	CustomerName    string      `json:"user_name"`
-	CustomerEmail   string      `json:"user_email"`
-	Status          string      `json:"status"`
-	StatusFormatted string      `json:"status_formatted"`
+	CustomerID      int    `json:"customer_id"`
+	OrderID         int    `json:"order_id"`
+	OrderItemID     int    `json:"order_item_id"`
+	ProductID       int    `json:"product_id"`
+	VariantID       int    `json:"variant_id"`
+	CustomerName    string `json:"user_name"`
+	CustomerEmail   string `json:"user_email"`
+	Status          string `json:"status"`
+	StatusFormatted string `json:"status_formatted"`
+}
+
+type WebhookBody struct {
+	Meta struct {
+		CustomData *WebhookCustomData `json:"custom_data"`
+	} `json:"meta"`
+	Data *struct {
+		Attributes *CustomerAttributes `json:"attributes"`
+	} `json:"data"`
 }
 
 type WebhookInput struct {
 	Signature string `header:"X-Signature" required:"true"`
 	EventName string `header:"X-Event-Name" required:"true"`
-	Body      struct {
-		CustomData *WebhookCustomData `json:"custom_data"`
-		Data       *struct {
-			Attributes *CustomerAttributes `json:"attributes"`
-		} `json:"data"`
-	}
-	RawBody []byte
+	RawBody   []byte
 }
 
 func (app *App) lemonPost(ctx context.Context, input *WebhookInput) (*WebhookResponse, error) {
-	if !hmac.Equal(app.webhookHash.Sum(input.RawBody), []byte(input.Signature)) {
-		return &WebhookResponse{Status: 500}, nil
+	body := WebhookBody{}
+	if err := json.Unmarshal(input.RawBody, &body); err != nil {
+		log.Println("failed to unmarshal", err)
+		return &WebhookResponse{Status: 422}, nil
 	}
-	err := app.st.updateSubscription(ctx, input.Body.CustomData.UserID, input.Body.Data.Attributes)
-	if err != nil {
+	app.webhookHash.Write(input.RawBody)
+	if !hmac.Equal(app.webhookHash.Sum(nil), []byte(input.Signature)) {
+		log.Println("signature hash not valid")
+		return &WebhookResponse{Status: 422}, nil
+	}
+	if body.Data == nil || body.Meta.CustomData == nil || body.Data.Attributes == nil {
+		return &WebhookResponse{Status: 422}, nil
+	}
+	if err := app.st.updateSubscription(ctx, body.Meta.CustomData.UserID, body.Data.Attributes); err != nil {
 		log.Println(err)
 	}
 

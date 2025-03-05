@@ -5,13 +5,13 @@ go 1.24
 require (
 	cloud.google.com/go/logging v1.13.0
 	github.com/danielgtaylor/huma/v2 v2.28.0
+	github.com/gdexlab/go-render v1.0.1
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/go-chi/cors v1.2.1
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/spf13/cobra v1.9.1
 	github.com/sqids/sqids-go v0.4.1
 	github.com/stretchr/testify v1.10.0
-	github.com/stripe/stripe-go v70.15.0+incompatible
 )
 
 require (
