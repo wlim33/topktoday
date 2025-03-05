@@ -410,13 +410,15 @@ func (st Storage) updateSubscription(ctx context.Context, user_id string, attrib
 			user_email = excluded.user_email, 
 			status = excluded.status, 
 			status_formatted = excluded.status_formatted
-		`, user_id,
+		`,
+		user_id,
 		attributes.CustomerID,
 		attributes.OrderID,
 		attributes.OrderItemID,
 		attributes.ProductID,
 		attributes.VariantID,
 		attributes.CustomerName,
+		attributes.CustomerEmail,
 		attributes.Status,
 		attributes.StatusFormatted)
 
