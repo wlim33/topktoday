@@ -6,6 +6,7 @@ package main
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"testing"
@@ -121,10 +122,11 @@ func TestWebhook(t *testing.T) {
 
 	hash := hmac.New(sha256.New, []byte(key))
 	hash.Write([]byte(webhook_payload))
+
 	resp := api.Post("/webhooks/lemon_squeezy",
 		"Content-Type: application/json",
 		"X-Event-Name: order_created",
-		fmt.Sprintf("X-Signature: %s", hash.Sum(nil)),
+		fmt.Sprintf("X-Signature: %s", hex.EncodeToString(hash.Sum(nil))),
 		strings.NewReader(webhook_payload))
 
 	assert.Equal(t, 200, resp.Code)

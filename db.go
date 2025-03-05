@@ -74,7 +74,7 @@ func setupDB(ctx context.Context, connURL string) Storage {
 
 	}
 
-	db.Exec(ctx, `DROP TABLE IF EXISTS leaderboards, submissions, verifiers, customers`)
+	db.Exec(ctx, `DROP TABLE IF EXISTS leaderboards, submissions, verifiers`)
 
 	_, err = db.Exec(ctx, init_file)
 	if err != nil {
@@ -347,15 +347,6 @@ func (st Storage) linkAccounts(ctx context.Context, anon_id string, user_id stri
 
 	_, tx_err = tx.Exec(ctx, `
 		UPDATE submissions
-		SET userid=$2
-		WHERE userid=$1 AND EXISTS(SELECT 1 FROM "user" WHERE id=$1 AND "isAnonymous"=TRUE)
-		`, anon_id, user_id)
-	if tx_err != nil {
-		return tx_err
-	}
-
-	_, tx_err = tx.Exec(ctx, `
-		UPDATE customers
 		SET userid=$2
 		WHERE userid=$1 AND EXISTS(SELECT 1 FROM "user" WHERE id=$1 AND "isAnonymous"=TRUE)
 		`, anon_id, user_id)
