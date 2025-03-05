@@ -130,6 +130,5 @@ func TestActiveLeaderboardCount(t *testing.T) {
 			})
 		assert.Equal(t, 200, resp.Code, "Failed to create %s leaderboards", i+1)
 
-		assert.Equal(t, i, resp.Code, "Failed to create %s leaderboards", i+1)
 	}
 }

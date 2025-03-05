@@ -111,7 +111,5 @@ func createBasicLeaderboard(api humatest.TestAPI, t *testing.T, userid string) s
 	assert.Equal(t, 200, resp.Code)
 	var newResp NewLeaderboardResponseBody
 	json.Unmarshal(resp.Body.Bytes(), &newResp)
-
-	fmt.Println("id:", newResp.Id)
 	return newResp.Id
 }
