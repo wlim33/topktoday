@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
+	"net/http"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/jackc/pgx/v5"
@@ -11,19 +14,31 @@ func (app *App) postNewLeaderboard(ctx context.Context, input *struct {
 	NewLeaderboardBody
 	UserIDHeader
 }) (*NewLeaderboardResponse, error) {
-	// if customer, ok := ctx.Value(CUSTOMER_CONTEXT_KEY).(*CustomerInfo); ok {
-	// 	fmt.Println(customer)
-	// } else {
-	// 	fmt.Println("customer not found in handler")
-	// }
+	count, err := app.st.getActiveLeaderboardCount(ctx, input.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	if customer, ok := ctx.Value(CUSTOMER_CONTEXT_KEY).(*CustomerInfo); ok {
+		api_err := app.sendUsageUpdate(customer.subscription_id, count)
+		if api_err != nil {
+			return nil, api_err
+		}
+		if count > 50 {
+			return nil, errors.New("Reached new leaderboard limit -- upgrade your account or close an existing leaderboard.")
+		}
+	} else {
+		if count > 5 {
+			return nil, errors.New("Reached new leaderboard limit -- upgrade your account or close an existing leaderboard.")
+		}
+	}
 
 	raw_id, db_err := app.st.newLeaderboard(ctx, input.UserID, input.Body)
 	if db_err != nil {
 		return nil, db_err
 	}
 
-	leaderboard_id :=
-		app.parser.encodeLeaderboardID(raw_id)
+	leaderboard_id := app.parser.encodeLeaderboardID(raw_id)
 	resp := &NewLeaderboardResponse{}
 	resp.Body.Id = leaderboard_id
 	return resp, db_err
@@ -49,9 +64,27 @@ func (app *App) postNewScore(ctx context.Context, input *struct {
 }
 
 func (app *App) getLeaderboard(ctx context.Context, input *struct {
+	LastModified string `header:"If-Modified-Since"`
 	LeaderboardIDParam
 }) (*LeaderboardResponse, error) {
+
 	leaderboard_id := app.parser.decodeLeaderboardID(input.ID)
+	last_updated, err := app.st.getLastUpdatedTime(ctx, leaderboard_id)
+	if err != nil {
+		return nil, err
+	}
+	if len(input.LastModified) != 0 {
+		headerIfModifiedSince, header_parse_err := time.Parse(http.TimeFormat, input.LastModified)
+		if header_parse_err != nil {
+			return nil, header_parse_err
+		}
+		if headerIfModifiedSince.Compare(last_updated) > 0 {
+			return &LeaderboardResponse{
+				Status:       http.StatusNotModified,
+				LastModified: last_updated,
+			}, nil
+		}
+	}
 
 	scores, db_err := app.st.getLeaderboard(ctx, leaderboard_id)
 	if db_err != nil {
@@ -62,8 +95,10 @@ func (app *App) getLeaderboard(ctx context.Context, input *struct {
 		scores[i].ID = app.parser.encodeSubmissionID(uint64(scores[i].rawID))
 	}
 
-	resp := &LeaderboardResponse{}
-	resp.Body.Scores = scores
+	resp := &LeaderboardResponse{Status: 200}
+	resp.Body = &LeaderboardResponseBody{
+		Scores: scores,
+	}
 	return resp, nil
 }
 

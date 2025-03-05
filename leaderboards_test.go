@@ -6,14 +6,26 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
+	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/stretchr/testify/assert"
 )
 
+func getLeaderboardWithModifiedHeader(api humatest.TestAPI, leaderboard_id string, if_modified_since time.Time) (LeaderboardResponseBody, *httptest.ResponseRecorder) {
+	getResp := api.Get(fmt.Sprintf("/leaderboard/%s", leaderboard_id),
+		fmt.Sprintf("If-Modified-Since: %s", if_modified_since.UTC().Format(http.TimeFormat)))
+	var lResp LeaderboardResponseBody
+	json.Unmarshal(getResp.Body.Bytes(), &lResp)
+	return lResp, getResp
+}
+
 func getLeaderboard(api humatest.TestAPI, leaderboard_id string) (LeaderboardResponseBody, *httptest.ResponseRecorder) {
+
 	getResp := api.Get(fmt.Sprintf("/leaderboard/%s", leaderboard_id))
 	var lResp LeaderboardResponseBody
 	json.Unmarshal(getResp.Body.Bytes(), &lResp)
@@ -23,23 +35,9 @@ func getLeaderboard(api humatest.TestAPI, leaderboard_id string) (LeaderboardRes
 func TestDisplayName(t *testing.T) {
 
 	api := setupTestApi(t)
-	display_name := "Test Leaderboard Name"
+	display_name := "My First Leaderboard"
 
-	resp := api.Post("/leaderboard",
-		"UserID: testid",
-		map[string]any{
-			"title":             display_name,
-			"duration":          "00:01:00",
-			"highest_first":     true,
-			"is_time":           true,
-			"uses_verification": true,
-		})
-
-	var newResp NewLeaderboardResponseBody
-	json.Unmarshal(resp.Body.Bytes(), &newResp)
-
-	id := newResp.Id
-	assert.Equal(t, 200, resp.Code)
+	id := createBasicLeaderboard(api, t, "testid")
 
 	getNameResp := api.Get(fmt.Sprintf("/leaderboard/%s/name", id))
 
@@ -73,20 +71,7 @@ func TestGetBadIDTooLong(t *testing.T) {
 func TestNewLeaderboard(t *testing.T) {
 	api := setupTestApi(t)
 
-	resp := api.Post("/leaderboard",
-		"UserID: testid",
-		map[string]any{
-			"title":             "My First Leaderboard",
-			"duration":          "00:01:00",
-			"highest_first":     true,
-			"is_time":           true,
-			"uses_verification": true,
-		})
-	assert.Equal(t, 200, resp.Code)
-	var newResp NewLeaderboardResponseBody
-	json.Unmarshal(resp.Body.Bytes(), &newResp)
-
-	id := newResp.Id
+	id := createBasicLeaderboard(api, t, "testid")
 
 	if lResp, getResp := getLeaderboard(api, id); assert.Equal(t, 200, getResp.Code) {
 		assert.Zero(t, len(lResp.Scores))
@@ -97,20 +82,7 @@ func TestNewLeaderboard(t *testing.T) {
 func TestAddScores(t *testing.T) {
 	api := setupTestApi(t)
 
-	resp := api.Post("/leaderboard",
-		"UserID: testid",
-		map[string]any{
-			"title":             "My First Leaderboard",
-			"duration":          "00:01:00",
-			"highest_first":     true,
-			"is_time":           true,
-			"uses_verification": true,
-		})
-	assert.Equal(t, 200, resp.Code)
-	var newResp NewLeaderboardResponseBody
-	json.Unmarshal(resp.Body.Bytes(), &newResp)
-
-	id := newResp.Id
+	id := createBasicLeaderboard(api, t, "testid")
 
 	if lResp, getResp := getLeaderboard(api, id); assert.Equal(t, 200, getResp.Code) {
 		assert.Zero(t, len(lResp.Scores))
@@ -179,5 +151,52 @@ func TestAddScores(t *testing.T) {
 		assert.Equal(t, 11, lResp.Scores[0].Score)
 		assert.Equal(t, 11, lResp.Scores[1].Score)
 		assert.Equal(t, 9, lResp.Scores[2].Score)
+	}
+}
+
+func BenchmarkGetLeaderboard(b *testing.B) {
+	api := setupBenchmarkApi(b)
+	l_ids := []string{}
+
+	for range 100 {
+		id := benchmarkCreateBasicLeaderboard(api, b, "testid")
+		l_ids = append(l_ids, id)
+	}
+	for range 5000 {
+
+		postResp := api.Post(
+			fmt.Sprintf("/leaderboard/%s/submission", l_ids[rand.IntN(len(l_ids))]),
+			"UserID: testid3",
+			map[string]any{
+				"link":  "www.youtube.com",
+				"score": rand.IntN(500000000),
+			})
+
+		assert.Equal(b, 200, postResp.Code)
+	}
+
+	b.ResetTimer()
+	for b.Loop() {
+		_, getResp := getLeaderboard(api, l_ids[rand.IntN(len(l_ids))])
+		assert.Equal(b, 200, getResp.Code)
+	}
+
+}
+
+func TestLeaderboardUpdateTrigger(t *testing.T) {
+	api := setupTestApi(t)
+	id := createBasicLeaderboard(api, t, "testid")
+	postResp2 := api.Post(
+		fmt.Sprintf("/leaderboard/%s/submission", id),
+		"UserID: testid",
+		map[string]any{
+			"link":  "www.youtube.com",
+			"score": 10,
+		})
+
+	assert.Equal(t, 200, postResp2.Code)
+
+	if _, getResp := getLeaderboardWithModifiedHeader(api, id, time.Now().AddDate(0, 1, 0)); assert.Equal(t, http.StatusNotModified, getResp.Code) {
+		assert.NotEmpty(t, getResp.Header().Get("Last-Modified"))
 	}
 }

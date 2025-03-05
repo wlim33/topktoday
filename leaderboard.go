@@ -110,6 +110,7 @@ type App struct {
 	parser      IDParser
 	api         huma.API
 	webhookHash hash.Hash
+	lsApiKey    string
 }
 
 func (app *App) addRoutes(api huma.API) {
@@ -158,11 +159,12 @@ type Options struct {
 
 func main() {
 	log.Printf("app version: %s", VERSION)
-	port, db_url, ls_secret := os.Getenv("PORT"), os.Getenv("DB_URL"), os.Getenv("LS_SECRET")
+	port, db_url, ls_secret, api_key := os.Getenv("PORT"), os.Getenv("DB_URL"), os.Getenv("LS_SECRET"), os.Getenv("PAYMENT_API_KEY")
 	app := App{
 		log:         &logging.Logger{},
 		parser:      NewParser(),
 		webhookHash: hmac.New(sha256.New, []byte(ls_secret)),
+		lsApiKey:    api_key,
 	}
 
 	r := chi.NewMux()

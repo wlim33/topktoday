@@ -5,18 +5,19 @@ import (
 	"log"
 	"time"
 
+	_ "embed"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
-
-	_ "embed"
 )
 
 type LeaderboardConfig struct {
-	Duration         *string `json:"duration,omitempty" format:"time" example:"1\:00" doc:"Time after creation when the leaderboard stops accepting submissions. Don't include if you want the leaderboard to always accept submissions"`
-	Title            string  `json:"title" example:"My First Leaderboard" doc:"Leaderboard title"`
-	HighestFirst     bool    `json:"highest_first" example:"true" doc:"If true, higher scores/times are ranked higher, e.g. highest score is first, second highest is second."`
-	IsTime           bool    `json:"is_time" example:"false" doc:"If true, leaderboards scores are time values, e.g. 32 seconds"`
-	UsesVerification bool    `json:"uses_verification" example:"true" doc:"If true, scores need to be verified before they are shown on the main leaderboard."`
+	Title               string  `json:"title" example:"My First Leaderboard" doc:"Leaderboard title"`
+	HighestFirst        bool    `json:"highest_first" example:"true" doc:"If true, higher scores/times are ranked higher, e.g. highest score is first, second highest is second."`
+	IsTime              bool    `json:"is_time" example:"false" doc:"If true, leaderboards scores are time values, e.g. 00:32"`
+	MultipleSubmissions bool    `json:"multiple_submissions" example:"true" doc:"If true, a user can show up multiple times on the leaderboard."`
+	Duration            *string `json:"duration,omitempty" format:"time" example:"24\:00\:00" doc:"Duration the leaderboard accepts submissions, after start date. Default is at time of leaderboard creation."`
+	Start               *string `json:"start,omitempty" format:"date-time" example:"2024-09-05T14\:35" doc:"Datetime when the leaderboard opens. Default is at time of leaderboard creation."`
 }
 
 type Storage struct {
@@ -34,9 +35,9 @@ type Ranking struct {
 }
 
 type User struct {
-	ID        string    `json:"id"`
-	Username  string    `json:"username" example:"greensuigi" doc:"Submitter username."`
-	TimeAdded time.Time `json:"added_at"`
+	ID        string     `json:"id"`
+	Username  string     `json:"username" example:"greensuigi" doc:"Submitter username."`
+	TimeAdded *time.Time `json:"added_at,omitempty"`
 }
 
 type LeaderboardInfo struct {
@@ -52,7 +53,7 @@ type DetailedSubmission struct {
 	rawID            int
 	rawLeaderboardID int
 
-	Link                   string    `json:"link,omitempty" example:"https://www.youtube.com/watch?v=rdx0TPjX1qE" doc:"Latest link for this submission."`
+	Link                   string    `json:"link,omitempty" format:"uri" example:"https://www.youtube.com/watch?v=rdx0TPjX1qE" doc:"Latest link for this submission."`
 	ID                     string    `json:"id,omitempty"`
 	Score                  int       `json:"score" example:"12" doc:"Current score of submission."`
 	LeaderboardID          string    `json:"leaderboard_id" example:"EfhxLZ9ck" doc:"9 character leaderboard ID used for querying."`
@@ -90,21 +91,22 @@ func (st Storage) Close() {
 func (st Storage) newLeaderboard(ctx context.Context, user_id string, config LeaderboardConfig) (uint64, error) {
 	row := st.db.QueryRow(ctx, `
 		WITH ins_leaderboard AS (
-			INSERT INTO leaderboards(created_by, display_name, highest_first, is_time, duration, uses_verification) 
-			VALUES ($1, $2, $3, $4, $5, $6)
+			INSERT INTO leaderboards(created_by, display_name, highest_first, is_time, start, duration, multiple_submissions) 
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
 			RETURNING id
 		)
 		INSERT INTO verifiers(leaderboard, userid)
 		SELECT id, $1
 		FROM ins_leaderboard
 		RETURNING verifiers.leaderboard
-		`, user_id, config.Title, config.HighestFirst, config.IsTime, config.Duration, config.UsesVerification)
-	var leaderboard_id int
+		`, user_id, config.Title, config.HighestFirst, config.IsTime, config.Start, config.Duration, config.MultipleSubmissions)
+	var leaderboard_id uint64
 	err := row.Scan(&leaderboard_id)
+
 	if err != nil {
 		log.Println(err)
 	}
-	return uint64(leaderboard_id), err
+	return leaderboard_id, err
 }
 
 func (st Storage) verifyScore(ctx context.Context, leaderboard uint64, submission uint64, owner string, is_valid bool) (uint64, error) {
@@ -183,7 +185,7 @@ func (st Storage) getLeaderboardName(ctx context.Context, leaderboard uint64) (s
 	row := st.db.QueryRow(ctx, `
 		SELECT display_name
 		FROM leaderboards 
-		WHERE id=$1 AND created_at > (CURRENT_DATE - INTERVAL '1 days')
+		WHERE id=$1;
 		`, leaderboard)
 
 	var display_name string
@@ -287,15 +289,25 @@ func (st Storage) getUserSubmissions(ctx context.Context, user_id string) ([]Det
 
 func (st Storage) getLeaderboard(ctx context.Context, leaderboard uint64) ([]Ranking, error) {
 	rows, err := st.db.Query(ctx, `
+		WITH leaderboard_config(cutoff, highest_first) AS (
+			SELECT
+				CASE WHEN duration is NULL THEN NULL
+				ELSE start + duration
+				END, highest_first
+			FROM leaderboards
+			WHERE id=$1
+		)
 		SELECT submissions.userid, submissions.score, submissions.created_at, submissions.verified, submissions.id, "user".name
-		FROM submissions 
-		LEFT JOIN "user"
-		ON "user".id = submissions.userid
-		WHERE submissions.leaderboard=$1 AND submissions.created_at > (CURRENT_DATE - INTERVAL '1 days')
+		FROM 
+			(submissions LEFT JOIN "user"
+				ON "user".id = submissions.userid), 
+			leaderboard_config
+		WHERE submissions.leaderboard=$1 AND (leaderboard_config.cutoff > submissions.created_at OR leaderboard_config.cutoff is NULL)
 		ORDER BY 
-			submissions.score DESC,
+			(CASE WHEN leaderboard_config.highest_first THEN submissions.score END) DESC,
+			submissions.score ASC,
 			submissions.created_at DESC
-		LIMIT 25
+		LIMIT 100
 		`, leaderboard)
 
 	if err != nil {
@@ -358,6 +370,17 @@ func (st Storage) linkAccounts(ctx context.Context, anon_id string, user_id stri
 	return commit_err
 }
 
+func (st Storage) getActiveLeaderboardCount(ctx context.Context, user_id string) (int, error) {
+	var rowCount int
+	err := st.db.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM leaderboards
+		WHERE created_by=$1 AND (start + duration > NOW() OR duration is NULL)
+		`, user_id).Scan(&rowCount)
+	return rowCount, err
+
+}
+
 func (st Storage) createTestUser(ctx context.Context, id string, name string, email string, is_anonymous bool, customer_info CustomerInfo) error {
 	_, err := st.db.Exec(ctx, `
 		WITH first AS (
@@ -414,4 +437,16 @@ func (st Storage) updateSubscription(ctx context.Context, user_id string, attrib
 		attributes.StatusFormatted)
 
 	return err
+}
+
+func (st Storage) getLastUpdatedTime(ctx context.Context, leaderboard_id uint64) (time.Time, error) {
+	var lastUpdated time.Time
+	err := st.db.QueryRow(ctx, `
+		SELECT last_updated
+		FROM leaderboards
+		WHERE id=$1
+		`, leaderboard_id).Scan(&lastUpdated)
+
+	return lastUpdated, err
+
 }

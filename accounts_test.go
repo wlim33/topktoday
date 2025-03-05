@@ -29,37 +29,14 @@ func getAccountSubmissions(api humatest.TestAPI, user_id string) (AccountSubmiss
 
 func TestGetUserLeaderboards(t *testing.T) {
 	api := setupTestApi(t)
-
-	resp := api.Post("/leaderboard",
-		"UserID: testid",
-		map[string]any{
-			"title":             "My First Leaderboard",
-			"duration":          "00:01:00",
-			"highest_first":     true,
-			"is_time":           true,
-			"uses_verification": true,
-		})
-	assert.Equal(t, 200, resp.Code)
-	var newResp NewLeaderboardResponseBody
-	json.Unmarshal(resp.Body.Bytes(), &newResp)
+	createBasicLeaderboard(api, t, "testid")
 
 	if lResp, getResp := getAccountLeaderboards(api, "testid"); assert.Equal(t, 200, getResp.Code) {
 		assert.Equal(t, 1, len(lResp.Leaderboards))
 		assert.Equal(t, "My First Leaderboard", lResp.Leaderboards[0].Title)
 	}
 
-	resp2 := api.Post("/leaderboard",
-		"UserID: testid",
-		map[string]any{
-			"title":             "My Second Leaderboard",
-			"duration":          "00:01:00",
-			"highest_first":     true,
-			"is_time":           true,
-			"uses_verification": true,
-		})
-	assert.Equal(t, 200, resp2.Code)
-	var newResp2 NewLeaderboardResponseBody
-	json.Unmarshal(resp2.Body.Bytes(), &newResp2)
+	createBasicLeaderboard(api, t, "testid")
 
 	if lResp, getResp := getAccountLeaderboards(api, "testid"); assert.Equal(t, 200, getResp.Code) {
 		assert.Equal(t, 2, len(lResp.Leaderboards))
@@ -69,21 +46,10 @@ func TestGetUserLeaderboards(t *testing.T) {
 func TestGetUserSubmissions(t *testing.T) {
 	api := setupTestApi(t)
 
-	resp := api.Post("/leaderboard",
-		"UserID: testid",
-		map[string]any{
-			"title":             "My First Leaderboard",
-			"duration":          "00:01:00",
-			"highest_first":     true,
-			"is_time":           true,
-			"uses_verification": true,
-		})
-	assert.Equal(t, 200, resp.Code)
-	var newResp NewLeaderboardResponseBody
-	json.Unmarshal(resp.Body.Bytes(), &newResp)
+	id := createBasicLeaderboard(api, t, "anon")
 
 	subResp := api.Post(
-		fmt.Sprintf("/leaderboard/%s/submission", newResp.Id),
+		fmt.Sprintf("/leaderboard/%s/submission", id),
 		"UserID: testid",
 		map[string]any{
 			"score": 10,
@@ -97,7 +63,7 @@ func TestGetUserSubmissions(t *testing.T) {
 	}
 
 	submissionResp2 := api.Post(
-		fmt.Sprintf("/leaderboard/%s/submission", newResp.Id),
+		fmt.Sprintf("/leaderboard/%s/submission", id),
 		"UserID: testid",
 		map[string]any{
 			"score": 11,
@@ -117,20 +83,7 @@ func TestGetUserSubmissions(t *testing.T) {
 func TestLinkAnonymousAccount(t *testing.T) {
 	api := setupTestApi(t)
 
-	resp := api.Post("/leaderboard",
-		"UserID: anon",
-		map[string]any{
-			"title":             "My First Leaderboard",
-			"duration":          "00:01:00",
-			"highest_first":     true,
-			"is_time":           true,
-			"uses_verification": true,
-		})
-	assert.Equal(t, 200, resp.Code)
-	var newResp NewLeaderboardResponseBody
-	json.Unmarshal(resp.Body.Bytes(), &newResp)
-
-	id := newResp.Id
+	id := createBasicLeaderboard(api, t, "anon")
 
 	if lResp, getResp := getLeaderboard(api, id); assert.Equal(t, 200, getResp.Code) {
 		assert.Zero(t, len(lResp.Scores))
@@ -158,5 +111,25 @@ func TestLinkAnonymousAccount(t *testing.T) {
 	if lResp, getResp := getLeaderboard(api, id); assert.Equal(t, 200, getResp.Code) {
 		assert.Equal(t, 1, len(lResp.Scores))
 		assert.Equal(t, "testid", lResp.Scores[0].User.ID)
+	}
+}
+
+func TestActiveLeaderboardCount(t *testing.T) {
+	api := setupTestApi(t)
+
+	for i := range 50 {
+		resp := api.Post("/leaderboard",
+			"UserID: testid",
+			map[string]any{
+				"title":                "My First Leaderboard",
+				"highest_first":        true,
+				"is_time":              true,
+				"duration":             "00:01:00",
+				"start":                "2020-03-05T18:54:00+00:00",
+				"multiple_submissions": true,
+			})
+		assert.Equal(t, 200, resp.Code, "Failed to create %s leaderboards", i+1)
+
+		assert.Equal(t, i, resp.Code, "Failed to create %s leaderboards", i+1)
 	}
 }
