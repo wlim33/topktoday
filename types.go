@@ -92,9 +92,6 @@ type LeaderboardResponse struct {
 type MessageResponse struct {
 	Body MessageResponseBody
 }
-type LeaderboardNameResponseBody struct {
-	Name string `json:"name" example:"My Fist Leaderboard" doc:"Leaderboard display name."`
-}
 
 type SubmissionResponseBody struct {
 	ID string `json:"submission_id" example:"EfhxLZ9ck" minLength:"9" maxLength:"9" doc:"9 character submission ID used for querying."`
@@ -114,8 +111,8 @@ type SubmissionInfoResponseBody struct {
 	SubmitterUsername      string `json:"username" example:"greensuigi" doc:"Submitter username."`
 }
 
-type LeaderboardNameResponse struct {
-	Body LeaderboardNameResponseBody
+type LeaderboardInfoResponse struct {
+	Body LeaderboardInfo
 }
 type SubmissionResponse struct {
 	Body SubmissionResponseBody

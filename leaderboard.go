@@ -124,7 +124,7 @@ func (app *App) addRoutes(api huma.API) {
 		Middlewares: huma.Middlewares{app.CustomerMiddleware},
 	}, app.postNewLeaderboard)
 	huma.Get(api, "/leaderboard/{leaderboard_id}", app.getLeaderboard)
-	huma.Get(api, "/leaderboard/{leaderboard_id}/name", app.getLeaderboardName)
+	huma.Get(api, "/leaderboard/{leaderboard_id}/info", app.getLeaderboardInfo)
 	huma.Get(api, "/leaderboard/{leaderboard_id}/verifiers", app.getLeaderboardVerifiers)
 
 	// Submissions

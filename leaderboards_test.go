@@ -39,12 +39,12 @@ func TestDisplayName(t *testing.T) {
 
 	id := createBasicLeaderboard(api, t, "testid")
 
-	getNameResp := api.Get(fmt.Sprintf("/leaderboard/%s/name", id))
+	getNameResp := api.Get(fmt.Sprintf("/leaderboard/%s/info", id))
 
-	var lResp LeaderboardNameResponseBody
+	var lResp LeaderboardInfo
 	json.Unmarshal(getNameResp.Body.Bytes(), &lResp)
 
-	assert.Equal(t, display_name, lResp.Name)
+	assert.Equal(t, display_name, lResp.Title)
 }
 
 func TestGetBadIDEmpty(t *testing.T) {
