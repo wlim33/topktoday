@@ -42,15 +42,15 @@ type User struct {
 
 type LeaderboardInfo struct {
 	rawID               int
-	ID                  string        `json:"id"`
-	Title               string        `json:"title" example:"My First Leaderboard" doc:"Leaderboard title for associated submission."`
-	Verifiers           []User        `json:"verifiers,omitempty"`
-	TimeCreated         time.Time     `json:"created_at"`
-	StartTime           time.Time     `json:"start"`
-	Duration            time.Duration `json:"duration,omitempty"`
-	HighestFirst        bool          `json:"highest_first"`
-	IsTime              bool          `json:"is_time"`
-	MultipleSubmissions bool          `json:"allow_multiple"`
+	ID                  string         `json:"id"`
+	Title               string         `json:"title" example:"My First Leaderboard" doc:"Leaderboard title for associated submission."`
+	Verifiers           []User         `json:"verifiers,omitempty"`
+	TimeCreated         *time.Time     `json:"created_at"`
+	StartTime           *time.Time     `json:"start"`
+	Duration            *time.Duration `json:"duration,omitempty"`
+	HighestFirst        bool           `json:"highest_first"`
+	IsTime              bool           `json:"is_time"`
+	MultipleSubmissions bool           `json:"allow_multiple"`
 }
 
 type DetailedSubmission struct {
@@ -185,7 +185,7 @@ func (st Storage) updateSubmissionScore(ctx context.Context, leaderboard uint64,
 	return submission_id, nil
 }
 
-func (st Storage) getLeaderboardName(ctx context.Context, leaderboard uint64) (LeaderboardInfo, error) {
+func (st Storage) getLeaderboardInfo(ctx context.Context, leaderboard uint64) (LeaderboardInfo, error) {
 
 	var info LeaderboardInfo
 	err := st.db.QueryRow(ctx, `

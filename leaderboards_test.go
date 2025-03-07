@@ -32,7 +32,7 @@ func getLeaderboard(api humatest.TestAPI, leaderboard_id string) (LeaderboardRes
 	return lResp, getResp
 }
 
-func TestDisplayName(t *testing.T) {
+func TestLeaderboardInfo(t *testing.T) {
 
 	api := setupTestApi(t)
 	display_name := "My First Leaderboard"

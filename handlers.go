@@ -196,7 +196,7 @@ func (app *App) getLeaderboardInfo(ctx context.Context, input *struct {
 }) (*LeaderboardInfoResponse, error) {
 	leaderboard_id := app.parser.decodeLeaderboardID(input.ID)
 
-	info, db_err := app.st.getLeaderboardName(ctx, leaderboard_id)
+	info, db_err := app.st.getLeaderboardInfo(ctx, leaderboard_id)
 
 	if db_err != nil {
 		return nil, db_err
