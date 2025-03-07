@@ -191,19 +191,19 @@ func (app *App) getLeaderboardVerifiers(ctx context.Context, input *struct {
 	return resp, nil
 }
 
-func (app *App) getLeaderboardName(ctx context.Context, input *struct {
+func (app *App) getLeaderboardInfo(ctx context.Context, input *struct {
 	LeaderboardIDParam
-}) (*LeaderboardNameResponse, error) {
+}) (*LeaderboardInfoResponse, error) {
 	leaderboard_id := app.parser.decodeLeaderboardID(input.ID)
 
-	display_name, db_err := app.st.getLeaderboardName(ctx, leaderboard_id)
+	info, db_err := app.st.getLeaderboardName(ctx, leaderboard_id)
 
 	if db_err != nil {
 		return nil, db_err
 	}
 
-	resp := &LeaderboardNameResponse{}
-	resp.Body.Name = display_name
+	resp := &LeaderboardInfoResponse{}
+	resp.Body = info
 	return resp, nil
 }
 

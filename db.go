@@ -16,7 +16,7 @@ type LeaderboardConfig struct {
 	HighestFirst        bool    `json:"highest_first" example:"true" doc:"If true, higher scores/times are ranked higher, e.g. highest score is first, second highest is second."`
 	IsTime              bool    `json:"is_time" example:"false" doc:"If true, leaderboards scores are time values, e.g. 00:32"`
 	MultipleSubmissions bool    `json:"multiple_submissions" example:"true" doc:"If true, a user can show up multiple times on the leaderboard."`
-	Duration            *string `json:"duration,omitempty" format:"time" example:"24\:00\:00" doc:"Duration the leaderboard accepts submissions, after start date. Default is at time of leaderboard creation."`
+	Duration            *string `json:"duration,omitempty"  example:"P1D" doc:"Duration the leaderboard accepts submissions, after start date. Default is at time of leaderboard creation."`
 	Start               *string `json:"start,omitempty" format:"date-time" example:"2024-09-05T14\:35" doc:"Datetime when the leaderboard opens. Default is at time of leaderboard creation."`
 }
 
@@ -41,12 +41,16 @@ type User struct {
 }
 
 type LeaderboardInfo struct {
-	rawID int
-
-	ID          string    `json:"id"`
-	Title       string    `json:"title" example:"My First Leaderboard" doc:"Leaderboard title for associated submission."`
-	Verifiers   []User    `json:"verifiers,omitempty"`
-	TimeCreated time.Time `json:"created_at"`
+	rawID               int
+	ID                  string        `json:"id"`
+	Title               string        `json:"title" example:"My First Leaderboard" doc:"Leaderboard title for associated submission."`
+	Verifiers           []User        `json:"verifiers,omitempty"`
+	TimeCreated         time.Time     `json:"created_at"`
+	StartTime           time.Time     `json:"start"`
+	Duration            time.Duration `json:"duration,omitempty"`
+	HighestFirst        bool          `json:"highest_first"`
+	IsTime              bool          `json:"is_time"`
+	MultipleSubmissions bool          `json:"allow_multiple"`
 }
 
 type DetailedSubmission struct {
@@ -181,19 +185,19 @@ func (st Storage) updateSubmissionScore(ctx context.Context, leaderboard uint64,
 	return submission_id, nil
 }
 
-func (st Storage) getLeaderboardName(ctx context.Context, leaderboard uint64) (string, error) {
-	row := st.db.QueryRow(ctx, `
-		SELECT display_name
+func (st Storage) getLeaderboardName(ctx context.Context, leaderboard uint64) (LeaderboardInfo, error) {
+
+	var info LeaderboardInfo
+	err := st.db.QueryRow(ctx, `
+		SELECT display_name, start, duration, is_time, multiple_submissions, highest_first
 		FROM leaderboards 
 		WHERE id=$1;
-		`, leaderboard)
+		`, leaderboard).Scan(&info.Title, &info.StartTime, &info.Duration, &info.IsTime, &info.MultipleSubmissions, &info.HighestFirst)
 
-	var display_name string
-	err := row.Scan(&display_name)
 	if err != nil {
-		return "", err
+		return info, err
 	}
-	return display_name, nil
+	return info, nil
 }
 
 func (st Storage) getVerifiers(ctx context.Context, leaderboard_id uint64) ([]User, error) {
