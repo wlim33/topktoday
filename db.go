@@ -16,7 +16,7 @@ type LeaderboardConfig struct {
 	HighestFirst        bool    `json:"highest_first" example:"true" doc:"If true, higher scores/times are ranked higher, e.g. highest score is first, second highest is second."`
 	IsTime              bool    `json:"is_time" example:"false" doc:"If true, leaderboards scores are time values, e.g. 00:32"`
 	MultipleSubmissions bool    `json:"multiple_submissions" example:"true" doc:"If true, a user can show up multiple times on the leaderboard."`
-	Duration            *string `json:"duration,omitempty" format:"time" example:"24\:00\:00" doc:"Duration the leaderboard accepts submissions, after start date. Default is at time of leaderboard creation."`
+	Duration            *string `json:"duration,omitempty"  example:"P1D" doc:"Duration the leaderboard accepts submissions, after start date. Default is at time of leaderboard creation."`
 	Start               *string `json:"start,omitempty" format:"date-time" example:"2024-09-05T14\:35" doc:"Datetime when the leaderboard opens. Default is at time of leaderboard creation."`
 }
 
@@ -41,8 +41,7 @@ type User struct {
 }
 
 type LeaderboardInfo struct {
-	rawID int
-
+	rawID       int
 	ID          string    `json:"id"`
 	Title       string    `json:"title" example:"My First Leaderboard" doc:"Leaderboard title for associated submission."`
 	Verifiers   []User    `json:"verifiers,omitempty"`
