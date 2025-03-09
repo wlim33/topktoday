@@ -17,12 +17,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       - name: Set Version
         id: set-version
         run: |
           echo "LATEST_TAG=$(git describe --tags --abbrev=0 2> /dev/null || git describe --always)" >> $GITHUB_OUTPUT
       - name: Set up Go
         uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
 
       - name: Export OpenAPI to file
         run: go run -ldflags="-X 'main.VERSION=${{ steps.set-version.outputs.LATEST_TAG }}'" . openapi > openapi.yaml
@@ -31,7 +35,7 @@ jobs:
         uses: bump-sh/github-action@v1
         with:
           doc: topktoday
-          token: ${{secrets.BUMP_TOKEN}}
+          token: ${{secrets.BUMP_API_TOKEN}}
           file: openapi.yaml
   api-diff:
     if: ${{ github.event_name == 'pull_request' }}
@@ -40,12 +44,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       - name: Set Version
         id: set-version
         run: |
           echo "LATEST_TAG=$(git describe --tags --abbrev=0 2> /dev/null || git describe --always)" >> $GITHUB_OUTPUT
       - name: Set up Go
         uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
 
       - name: Export OpenAPI to file
         run: go run -ldflags="-X 'main.VERSION=${{ steps.set-version.outputs.LATEST_TAG }}'" . openapi > openapi.yaml
