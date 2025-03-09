@@ -95,9 +95,9 @@ func OpenAPIGenConfig() huma.Config {
 	config.Servers = []*huma.Server{
 		{URL: url},
 	}
-	if !(len(DOCS) > 0) && !(len(CLI) > 0) {
-		config.DocsPath = ""
-	}
+	// if !(len(DOCS) > 0) && !(len(CLI) > 0) {
+	// 	config.DocsPath = ""
+	// }
 
 	return config
 }
