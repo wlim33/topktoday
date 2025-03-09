@@ -1,0 +1,68 @@
+name: Check & deploy API documentation
+permissions:
+  contents: read
+  pull-requests: write
+on:
+  push:
+    branches:
+      - release
+  pull_request:
+    branches:
+      - release
+jobs:
+  deploy-doc:
+    if: ${{ github.event_name == 'push' }}
+    name: Deploy API documentation on Bump.sh
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Set Version
+        id: set-version
+        run: |
+          echo "LATEST_TAG=$(git describe --tags --abbrev=0 2> /dev/null || git describe --always)" >> $GITHUB_OUTPUT
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Export OpenAPI to file
+        run: go run -ldflags="-X 'main.VERSION=${{ steps.set-version.outputs.LATEST_TAG }}'" . openapi > openapi.yaml
+
+      - name: Deploy API documentation
+        uses: bump-sh/github-action@v1
+        with:
+          doc: topktoday
+          token: ${{ secrets.BUMP_API_TOKEN }}
+          file: openapi.yaml
+  api-diff:
+    if: ${{ github.event_name == 'pull_request' }}
+    name: Check API diff on Bump.sh
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Set Version
+        id: set-version
+        run: |
+          echo "LATEST_TAG=$(git describe --tags --abbrev=0 2> /dev/null || git describe --always)" >> $GITHUB_OUTPUT
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Export OpenAPI to file
+        run: go run -ldflags="-X 'main.VERSION=${{ steps.set-version.outputs.LATEST_TAG }}'" . openapi > openapi.yaml
+      - name: Comment pull request with API diff
+        uses: bump-sh/github-action@v1
+        with:
+          doc: topktoday
+          token: ${{ secrets.BUMP_API_TOKEN }}
+          file: openapi.yaml
+          command: diff
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
