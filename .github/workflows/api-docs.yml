@@ -14,7 +14,7 @@ jobs:
     if: ${{ github.event_name == 'push' }}
     name: Deploy API documentation on Bump.sh
     runs-on: ubuntu-latest
-    environment: development
+    environment: Development
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -42,7 +42,7 @@ jobs:
     if: ${{ github.event_name == 'pull_request' }}
     name: Check API diff on Bump.sh
     runs-on: ubuntu-latest
-    environment: development
+    environment: Development
     steps:
       - name: Checkout
         uses: actions/checkout@v3
