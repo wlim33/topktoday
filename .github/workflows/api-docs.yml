@@ -35,7 +35,7 @@ jobs:
         uses: bump-sh/github-action@v1
         with:
           doc: topktoday
-          token: ${{secrets.BUMP_API_TOKEN}}
+          token: ${{ secrets.BUMP_API_TOKEN }}
           file: openapi.yaml
   api-diff:
     if: ${{ github.event_name == 'pull_request' }}
@@ -61,7 +61,7 @@ jobs:
         uses: bump-sh/github-action@v1
         with:
           doc: topktoday
-          token: ${{secrets.BUMP_API_TOKEN}}
+          token: ${{ secrets.BUMP_API_TOKEN }}
           file: openapi.yaml
           command: diff
         env:
