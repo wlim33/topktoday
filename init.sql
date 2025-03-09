@@ -37,6 +37,9 @@ CREATE TABLE IF NOT EXISTS leaderboards (
 );
 
 
+CREATE INDEX lb_id ON leaderboards (id) INCLUDE (id, created_by, display_name, created_at, last_updated, highest_first, is_time, uses_verification, duration, start, multiple_submissions);
+
+
 
 CREATE TABLE IF NOT EXISTS submissions (
 	id INT GENERATED ALWAYS AS IDENTITY UNIQUE,
@@ -51,12 +54,17 @@ CREATE TABLE IF NOT EXISTS submissions (
 );
 
 
+CREATE INDEX lb_score_idx ON submissions (leaderboard, score) INCLUDE (id, userid, link, created_at, score, verified, last_updated);
+
+
 CREATE TABLE IF NOT EXISTS verifiers (
 	leaderboard INT REFERENCES leaderboards(id),
 	userid TEXT REFERENCES "user"(id) ON UPDATE CASCADE,
 	added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	PRIMARY KEY(leaderboard, userid)
 );
+
+CREATE INDEX veferiers_idx ON verifiers (leaderboard) INCLUDE (userid, added_at);
 
 
 CREATE OR REPLACE FUNCTION function_update_timestamp() RETURNS TRIGGER AS

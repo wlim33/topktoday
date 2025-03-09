@@ -154,15 +154,35 @@ func TestAddScores(t *testing.T) {
 	}
 }
 
-func BenchmarkGetLeaderboard(b *testing.B) {
+func Benchmark50Leaderboards100Submissions(b *testing.B) {
+	benchmarkGetLeaderboard(50, 100, b)
+}
+
+func Benchmark50Leaderboards1000Submissions(b *testing.B) {
+	benchmarkGetLeaderboard(50, 1000, b)
+}
+
+func Benchmark50Leaderboards10000Submissions(b *testing.B) {
+	benchmarkGetLeaderboard(50, 10000, b)
+}
+
+func Benchmark10Leaderboards1000Submissions(b *testing.B) {
+	benchmarkGetLeaderboard(10, 1000, b)
+}
+
+func Benchmark10Leaderboards10000Submissions(b *testing.B) {
+	benchmarkGetLeaderboard(10, 10000, b)
+}
+
+func benchmarkGetLeaderboard(l_count, s_count int, b *testing.B) {
 	api := setupBenchmarkApi(b)
 	l_ids := []string{}
 
-	for range 100 {
+	for range l_count {
 		id := benchmarkCreateBasicLeaderboard(api, b, "testid")
 		l_ids = append(l_ids, id)
 	}
-	for range 5000 {
+	for range s_count {
 
 		postResp := api.Post(
 			fmt.Sprintf("/leaderboard/%s/submission", l_ids[rand.IntN(len(l_ids))]),
