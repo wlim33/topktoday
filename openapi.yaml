@@ -1,0 +1,866 @@
+components:
+  schemas:
+    AccountLeaderboardsResponseBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://api.topktoday.dev/schemas/AccountLeaderboardsResponseBody.json
+          format: uri
+          readOnly: true
+          type: string
+        leaderboards:
+          items:
+            $ref: "#/components/schemas/LeaderboardInfo"
+          type:
+            - array
+            - "null"
+      required:
+        - leaderboards
+      type: object
+    AccountSubmissionsResponseBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://api.topktoday.dev/schemas/AccountSubmissionsResponseBody.json
+          format: uri
+          readOnly: true
+          type: string
+        submissions:
+          items:
+            $ref: "#/components/schemas/DetailedSubmission"
+          type:
+            - array
+            - "null"
+      required:
+        - submissions
+      type: object
+    DetailedSubmission:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://api.topktoday.dev/schemas/DetailedSubmission.json
+          format: uri
+          readOnly: true
+          type: string
+        id:
+          type: string
+        last_submitted:
+          format: date-time
+          type: string
+        leaderboard_id:
+          description: 9 character leaderboard ID used for querying.
+          examples:
+            - EfhxLZ9ck
+          type: string
+        leaderboard_title:
+          description: Leaderboard title for associated submission.
+          examples:
+            - My First Leaderboard
+          type: string
+        link:
+          description: Latest link for this submission.
+          examples:
+            - https://www.youtube.com/watch?v=rdx0TPjX1qE
+          format: uri
+          type: string
+        score:
+          description: Current score of submission.
+          examples:
+            - 12
+          format: int64
+          type: integer
+        submitted_by:
+          $ref: "#/components/schemas/User"
+        verified:
+          description: Current verification status.
+          examples:
+            - true
+          type: boolean
+      required:
+        - score
+        - leaderboard_id
+        - leaderboard_title
+        - last_submitted
+        - verified
+      type: object
+    ErrorDetail:
+      additionalProperties: false
+      properties:
+        location:
+          description: Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id'
+          type: string
+        message:
+          description: Error message text
+          type: string
+        value:
+          description: The value at the given location
+      type: object
+    ErrorModel:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://api.topktoday.dev/schemas/ErrorModel.json
+          format: uri
+          readOnly: true
+          type: string
+        detail:
+          description: A human-readable explanation specific to this occurrence of the problem.
+          examples:
+            - Property foo is required but is missing.
+          type: string
+        errors:
+          description: Optional list of individual error details
+          items:
+            $ref: "#/components/schemas/ErrorDetail"
+          type:
+            - array
+            - "null"
+        instance:
+          description: A URI reference that identifies the specific occurrence of the problem.
+          examples:
+            - https://example.com/error-log/abc123
+          format: uri
+          type: string
+        status:
+          description: HTTP status code
+          examples:
+            - 400
+          format: int64
+          type: integer
+        title:
+          description: A short, human-readable summary of the problem type. This value should not change between occurrences of the error.
+          examples:
+            - Bad Request
+          type: string
+        type:
+          default: about:blank
+          description: A URI reference to human-readable documentation for the error.
+          examples:
+            - https://example.com/errors/example
+          format: uri
+          type: string
+      type: object
+    LeaderboardConfig:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://api.topktoday.dev/schemas/LeaderboardConfig.json
+          format: uri
+          readOnly: true
+          type: string
+        duration:
+          description: Duration the leaderboard accepts submissions, after start date. Default is at time of leaderboard creation.
+          examples:
+            - P1D
+          type: string
+        highest_first:
+          description: If true, higher scores/times are ranked higher, e.g. highest score is first, second highest is second.
+          examples:
+            - true
+          type: boolean
+        is_time:
+          description: If true, leaderboards scores are time values, e.g. 00:32
+          examples:
+            - false
+          type: boolean
+        multiple_submissions:
+          description: If true, a user can show up multiple times on the leaderboard.
+          examples:
+            - true
+          type: boolean
+        start:
+          description: Datetime when the leaderboard opens. Default is at time of leaderboard creation.
+          format: date-time
+          type: string
+        title:
+          description: Leaderboard title
+          examples:
+            - My First Leaderboard
+          type: string
+      required:
+        - title
+        - highest_first
+        - is_time
+        - multiple_submissions
+      type: object
+    LeaderboardInfo:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://api.topktoday.dev/schemas/LeaderboardInfo.json
+          format: uri
+          readOnly: true
+          type: string
+        allow_multiple:
+          type: boolean
+        created_at:
+          format: date-time
+          type:
+            - string
+            - "null"
+        duration:
+          format: int64
+          type: integer
+        highest_first:
+          type: boolean
+        id:
+          type: string
+        is_time:
+          type: boolean
+        start:
+          format: date-time
+          type:
+            - string
+            - "null"
+        title:
+          description: Leaderboard title for associated submission.
+          examples:
+            - My First Leaderboard
+          type: string
+        verifiers:
+          items:
+            $ref: "#/components/schemas/User"
+          type:
+            - array
+            - "null"
+      required:
+        - id
+        - title
+        - created_at
+        - start
+        - highest_first
+        - is_time
+        - allow_multiple
+      type: object
+    LeaderboardResponseBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://api.topktoday.dev/schemas/LeaderboardResponseBody.json
+          format: uri
+          readOnly: true
+          type: string
+        scores:
+          items:
+            $ref: "#/components/schemas/Ranking"
+          type:
+            - array
+            - "null"
+      required:
+        - scores
+      type: object
+    LeaderboardVerifiersResponseBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://api.topktoday.dev/schemas/LeaderboardVerifiersResponseBody.json
+          format: uri
+          readOnly: true
+          type: string
+        verifiers:
+          items:
+            $ref: "#/components/schemas/User"
+          type:
+            - array
+            - "null"
+      required:
+        - verifiers
+      type: object
+    MessageResponseBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://api.topktoday.dev/schemas/MessageResponseBody.json
+          format: uri
+          readOnly: true
+          type: string
+        message:
+          description: Human readable message.
+          examples:
+            - All systems go!
+          type: string
+      required:
+        - message
+      type: object
+    NewLeaderboardResponseBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://api.topktoday.dev/schemas/NewLeaderboardResponseBody.json
+          format: uri
+          readOnly: true
+          type: string
+        id:
+          description: 9 character leaderboard ID used for querying.
+          examples:
+            - EfhxLZ9ck
+          maxLength: 9
+          minLength: 9
+          type: string
+      required:
+        - id
+      type: object
+    Patch-leaderboard-by-leaderboard-id-submission-by-submission-id-scoreRequest:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://api.topktoday.dev/schemas/Patch-leaderboard-by-leaderboard-id-submission-by-submission-id-scoreRequest.json
+          format: uri
+          readOnly: true
+          type: string
+        link:
+          type: string
+        score:
+          format: int64
+          type: integer
+      required:
+        - link
+        - score
+      type: object
+    Patch-leaderboard-by-leaderboard-id-submission-by-submission-id-verifyRequest:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://api.topktoday.dev/schemas/Patch-leaderboard-by-leaderboard-id-submission-by-submission-id-verifyRequest.json
+          format: uri
+          readOnly: true
+          type: string
+        is_valid:
+          type: boolean
+      required:
+        - is_valid
+      type: object
+    Post-account-link-anonymousRequest:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://api.topktoday.dev/schemas/Post-account-link-anonymousRequest.json
+          format: uri
+          readOnly: true
+          type: string
+        anon_id:
+          type: string
+      required:
+        - anon_id
+      type: object
+    Post-leaderboard-by-leaderboard-id-submissionRequest:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://api.topktoday.dev/schemas/Post-leaderboard-by-leaderboard-id-submissionRequest.json
+          format: uri
+          readOnly: true
+          type: string
+        link:
+          type: string
+        score:
+          format: int64
+          type: integer
+      required:
+        - link
+        - score
+      type: object
+    Ranking:
+      additionalProperties: false
+      properties:
+        added_at:
+          format: date-time
+          type: string
+        id:
+          type: string
+        score:
+          format: int64
+          type: integer
+        submitted_at:
+          format: date-time
+          type: string
+        username:
+          description: Submitter username.
+          examples:
+            - greensuigi
+          type: string
+        verified:
+          type: boolean
+      required:
+        - id
+        - score
+        - submitted_at
+        - verified
+        - username
+      type: object
+    SubmissionResponseBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - https://api.topktoday.dev/schemas/SubmissionResponseBody.json
+          format: uri
+          readOnly: true
+          type: string
+        submission_id:
+          description: 9 character submission ID used for querying.
+          examples:
+            - EfhxLZ9ck
+          maxLength: 9
+          minLength: 9
+          type: string
+      required:
+        - submission_id
+      type: object
+    User:
+      additionalProperties: false
+      properties:
+        added_at:
+          format: date-time
+          type: string
+        id:
+          type: string
+        username:
+          description: Submitter username.
+          examples:
+            - greensuigi
+          type: string
+      required:
+        - id
+        - username
+      type: object
+host: https://api.topktoday.dev
+info:
+  title: leaderapi
+  version: 0.0.22
+openapi: 3.1.0
+paths:
+  /account/link_anonymous:
+    post:
+      operationId: post-account-link-anonymous
+      parameters:
+        - in: header
+          name: UserID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Post-account-link-anonymousRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponseBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Post account link anonymous
+  /account/{user_id}/leaderboards:
+    get:
+      operationId: get-account-by-user-id-leaderboards
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountLeaderboardsResponseBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get account by user ID leaderboards
+  /account/{user_id}/submissions:
+    get:
+      operationId: get-account-by-user-id-submissions
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountSubmissionsResponseBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get account by user ID submissions
+  /health:
+    get:
+      operationId: get-health
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponseBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get health
+  /leaderboard:
+    post:
+      operationId: new-leaderboard
+      parameters:
+        - in: header
+          name: UserID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeaderboardConfig"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NewLeaderboardResponseBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+  /leaderboard/{leaderboard_id}:
+    get:
+      operationId: get-leaderboard-by-leaderboard-id
+      parameters:
+        - in: header
+          name: If-Modified-Since
+          schema:
+            type: string
+        - description: 9 character leaderboard ID used for querying.
+          example: EfhxLZ9ck
+          in: path
+          name: leaderboard_id
+          required: true
+          schema:
+            description: 9 character leaderboard ID used for querying.
+            examples:
+              - EfhxLZ9ck
+            maxLength: 9
+            minLength: 9
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaderboardResponseBody"
+          description: OK
+          headers:
+            Last-Modified:
+              schema:
+                type: string
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get leaderboard by leaderboard ID
+  /leaderboard/{leaderboard_id}/info:
+    get:
+      operationId: get-leaderboard-by-leaderboard-id-info
+      parameters:
+        - description: 9 character leaderboard ID used for querying.
+          example: EfhxLZ9ck
+          in: path
+          name: leaderboard_id
+          required: true
+          schema:
+            description: 9 character leaderboard ID used for querying.
+            examples:
+              - EfhxLZ9ck
+            maxLength: 9
+            minLength: 9
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaderboardInfo"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get leaderboard by leaderboard ID info
+  /leaderboard/{leaderboard_id}/submission:
+    post:
+      operationId: post-leaderboard-by-leaderboard-id-submission
+      parameters:
+        - description: 9 character leaderboard ID used for querying.
+          example: EfhxLZ9ck
+          in: path
+          name: leaderboard_id
+          required: true
+          schema:
+            description: 9 character leaderboard ID used for querying.
+            examples:
+              - EfhxLZ9ck
+            maxLength: 9
+            minLength: 9
+            type: string
+        - in: header
+          name: UserID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Post-leaderboard-by-leaderboard-id-submissionRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmissionResponseBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Post leaderboard by leaderboard ID submission
+  /leaderboard/{leaderboard_id}/submission/{submission_id}:
+    get:
+      operationId: get-leaderboard-by-leaderboard-id-submission-by-submission-id
+      parameters:
+        - description: 9 character leaderboard ID used for querying.
+          example: EfhxLZ9ck
+          in: path
+          name: leaderboard_id
+          required: true
+          schema:
+            description: 9 character leaderboard ID used for querying.
+            examples:
+              - EfhxLZ9ck
+            maxLength: 9
+            minLength: 9
+            type: string
+        - description: 9 character submission ID used for querying.
+          example: EfhxLZ9ck
+          in: path
+          name: submission_id
+          required: true
+          schema:
+            description: 9 character submission ID used for querying.
+            examples:
+              - EfhxLZ9ck
+            maxLength: 9
+            minLength: 9
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetailedSubmission"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get leaderboard by leaderboard ID submission by submission ID
+  /leaderboard/{leaderboard_id}/submission/{submission_id}/score:
+    patch:
+      operationId: patch-leaderboard-by-leaderboard-id-submission-by-submission-id-score
+      parameters:
+        - description: 9 character leaderboard ID used for querying.
+          example: EfhxLZ9ck
+          in: path
+          name: leaderboard_id
+          required: true
+          schema:
+            description: 9 character leaderboard ID used for querying.
+            examples:
+              - EfhxLZ9ck
+            maxLength: 9
+            minLength: 9
+            type: string
+        - description: 9 character submission ID used for querying.
+          example: EfhxLZ9ck
+          in: path
+          name: submission_id
+          required: true
+          schema:
+            description: 9 character submission ID used for querying.
+            examples:
+              - EfhxLZ9ck
+            maxLength: 9
+            minLength: 9
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Patch-leaderboard-by-leaderboard-id-submission-by-submission-id-scoreRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmissionResponseBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Patch leaderboard by leaderboard ID submission by submission ID score
+  /leaderboard/{leaderboard_id}/submission/{submission_id}/verify:
+    patch:
+      operationId: patch-leaderboard-by-leaderboard-id-submission-by-submission-id-verify
+      parameters:
+        - description: 9 character leaderboard ID used for querying.
+          example: EfhxLZ9ck
+          in: path
+          name: leaderboard_id
+          required: true
+          schema:
+            description: 9 character leaderboard ID used for querying.
+            examples:
+              - EfhxLZ9ck
+            maxLength: 9
+            minLength: 9
+            type: string
+        - description: 9 character submission ID used for querying.
+          example: EfhxLZ9ck
+          in: path
+          name: submission_id
+          required: true
+          schema:
+            description: 9 character submission ID used for querying.
+            examples:
+              - EfhxLZ9ck
+            maxLength: 9
+            minLength: 9
+            type: string
+        - in: header
+          name: UserID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Patch-leaderboard-by-leaderboard-id-submission-by-submission-id-verifyRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmissionResponseBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Patch leaderboard by leaderboard ID submission by submission ID verify
+  /leaderboard/{leaderboard_id}/verifiers:
+    get:
+      operationId: get-leaderboard-by-leaderboard-id-verifiers
+      parameters:
+        - description: 9 character leaderboard ID used for querying.
+          example: EfhxLZ9ck
+          in: path
+          name: leaderboard_id
+          required: true
+          schema:
+            description: 9 character leaderboard ID used for querying.
+            examples:
+              - EfhxLZ9ck
+            maxLength: 9
+            minLength: 9
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaderboardVerifiersResponseBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get leaderboard by leaderboard ID verifiers
+servers:
+  - url: https://api.topktoday.dev
+
