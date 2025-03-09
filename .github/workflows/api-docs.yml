@@ -23,7 +23,6 @@ jobs:
       - name: Set Version
         id: set-version
         run: |
-          echo ${{ secrets.BUMP_API_TOKEN }}
           echo "LATEST_TAG=$(git describe --tags --abbrev=0 2> /dev/null || git describe --always)" >> $GITHUB_OUTPUT
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -53,7 +52,6 @@ jobs:
         id: set-version
         run: |
           echo "LATEST_TAG=$(git describe --tags --abbrev=0 2> /dev/null || git describe --always)" >> $GITHUB_OUTPUT
-          echo ${{ secrets.BUMP_API_TOKEN }}
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
