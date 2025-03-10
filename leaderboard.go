@@ -17,6 +17,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/humacli"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/spf13/cobra"
 	"github.com/sqids/sqids-go"
 )
@@ -108,6 +109,7 @@ type App struct {
 	api         huma.API
 	webhookHash hash.Hash
 	lsApiKey    string
+	cache       *lru.TwoQueueCache[string, *LeaderboardResponse]
 }
 
 func (app *App) addRoutes(api huma.API) {
@@ -120,7 +122,12 @@ func (app *App) addRoutes(api huma.API) {
 		Path:        "/leaderboard",
 		Middlewares: huma.Middlewares{app.CustomerMiddleware},
 	}, app.postNewLeaderboard)
-	huma.Get(api, "/leaderboard/{leaderboard_id}", app.getLeaderboard)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-leaderboard",
+		Method:      http.MethodGet,
+		Path:        "/leaderboard/{leaderboard_id}",
+	}, app.getLeaderboard)
 	huma.Get(api, "/leaderboard/{leaderboard_id}/info", app.getLeaderboardInfo)
 	huma.Get(api, "/leaderboard/{leaderboard_id}/verifiers", app.getLeaderboardVerifiers)
 
@@ -155,14 +162,14 @@ type Options struct {
 }
 
 func main() {
-	log.Printf("app version: %s", VERSION)
+	log.Printf("App version: %s", VERSION)
 	port, db_url, ls_secret, api_key := os.Getenv("PORT"), os.Getenv("DB_URL"), os.Getenv("LS_SECRET"), os.Getenv("PAYMENT_API_KEY")
-
 	app := App{
 		log:         &logging.Logger{},
 		parser:      NewParser(),
 		webhookHash: hmac.New(sha256.New, []byte(ls_secret)),
 		lsApiKey:    api_key,
+		cache:       initCache(),
 	}
 
 	r := chi.NewMux()

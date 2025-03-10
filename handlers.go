@@ -54,6 +54,9 @@ func (app *App) postNewScore(ctx context.Context, input *struct {
 	if db_err != nil {
 		return nil, db_err
 	}
+
+	app.cache.Remove(input.ID)
+
 	submission_id :=
 		app.parser.encodeSubmissionID(s_id)
 	return &SubmissionResponse{
@@ -86,6 +89,10 @@ func (app *App) getLeaderboard(ctx context.Context, input *struct {
 		}
 	}
 
+	if cached_resp, ok := app.cache.Get(input.ID); ok {
+		return cached_resp, nil
+	}
+
 	scores, db_err := app.st.getLeaderboard(ctx, leaderboard_id)
 	if db_err != nil {
 		return nil, db_err
@@ -99,6 +106,7 @@ func (app *App) getLeaderboard(ctx context.Context, input *struct {
 	resp.Body = &LeaderboardResponseBody{
 		Scores: scores,
 	}
+	app.cache.Add(input.ID, resp)
 	return resp, nil
 }
 
@@ -138,6 +146,7 @@ func (app *App) updateSubmission(ctx context.Context, input *struct {
 		return nil, db_err
 	}
 
+	app.cache.Remove(input.ID)
 	resp := &SubmissionResponse{
 		SubmissionResponseBody{
 			app.parser.encodeSubmissionID(submission_id),
@@ -164,6 +173,7 @@ func (app *App) VerifyScore(ctx context.Context, input *struct {
 		return nil, db_err
 	}
 
+	app.cache.Remove(input.ID)
 	resp := &SubmissionResponse{
 		SubmissionResponseBody{
 			app.parser.encodeSubmissionID(id),
