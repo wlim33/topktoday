@@ -1,6 +1,10 @@
 package main
 
-import "time"
+import (
+	"time"
+
+	"github.com/gofrs/uuid/v5"
+)
 
 type NotAuthorizedResponse struct {
 	Status int
@@ -8,22 +12,29 @@ type NotAuthorizedResponse struct {
 }
 
 type LeaderboardIDParam struct {
-	ID string `path:"leaderboard_id" example:"EfhxLZ9ck" minLength:"9" maxLength:"9" doc:"9 character leaderboard ID used for querying." required:"true"`
+	ID uuid.UUID `path:"leaderboard_id" format:"uuid" example:"146b2edf-2d6f-4775-9b86-5537a2649589" doc:"Unique leaderboard ID used for querying." required:"true"`
 }
 type SubmissionIDParam struct {
-	SubmissionID string `path:"submission_id" example:"EfhxLZ9ck" minLength:"9" maxLength:"9" doc:"9 character submission ID used for querying." required:"true"`
+	SubmissionID uuid.UUID `path:"submission_id" format:"uuid" example:"146b2edf-2d6f-4775-9b86-5537a2649589" doc:"Unique submission ID used for querying." required:"true"`
 }
 type UserIDParam struct {
-	UserID string `path:"user_id" required:"true"`
+	UserID string `path:"user_id" required:"true" example:"146b2edf-2d6f-4775-9b86-5537a2649589"`
 }
 
 type UserIDHeader struct {
-	UserID string `header:"UserID" required:"true"`
+	UserID string `header:"UserID" required:"true"  example:"146b2edf-2d6f-4775-9b86-5537a2649589"`
+}
+
+type CommentSubmissionBody struct {
+	Body struct {
+		Comment string `json:"comment" required:"false"`
+	}
 }
 
 type VerifyScoreBody struct {
 	Body struct {
-		IsValid bool `json:"is_valid" required:"true"`
+		IsValid bool   `json:"is_valid" required:"true"`
+		Comment string `json:"comment" required:"false"`
 	}
 }
 type NewSubmissionRequest struct {
@@ -35,7 +46,7 @@ type NewSubmissionRequest struct {
 
 type LinkAnonymousBody struct {
 	Body struct {
-		AnonID string `json:"anon_id"`
+		AnonID string `json:"anon_id" required:"true" example:"146b2edf-2d6f-4775-9b86-5537a2649589"`
 	}
 }
 
@@ -50,7 +61,7 @@ type ErrorResponse struct {
 }
 
 type NewLeaderboardResponseBody struct {
-	Id string `json:"id" example:"EfhxLZ9ck" minLength:"9" maxLength:"9" doc:"9 character leaderboard ID used for querying."`
+	Id uuid.UUID `json:"id" format:"uuid" example:"146b2edf-2d6f-4775-9b86-5537a2649589" doc:"Unique leaderboard ID used for querying."`
 }
 
 type LeaderboardVerifiersResponse struct {
@@ -94,7 +105,11 @@ type MessageResponse struct {
 }
 
 type SubmissionResponseBody struct {
-	ID string `json:"submission_id" example:"EfhxLZ9ck" minLength:"9" maxLength:"9" doc:"9 character submission ID used for querying."`
+	ID uuid.UUID `json:"submission_id" format:"uuid" example:"146b2edf-2d6f-4775-9b86-5537a2649589" doc:"Submission ID used for querying."`
+}
+
+type HistoryResponseBody struct {
+	History []HistoryEntry `json:"history" doc:"History of submission updates."`
 }
 
 type SubmissionInfoResponse struct {
@@ -103,11 +118,11 @@ type SubmissionInfoResponse struct {
 
 type SubmissionInfoResponseBody struct {
 	Score                  int    `json:"score" example:"12" doc:"Current score of submission."`
-	LeaderboardID          string `json:"leaderboard_id" example:"EfhxLZ9ck" minLength:"9" maxLength:"9" doc:"9 character leaderboard ID used for querying."`
+	LeaderboardID          string `json:"leaderboard_id" format:"uuid" example:"146b2edf-2d6f-4775-9b86-5537a2649589" doc:"Leaderboard ID used for querying."`
 	LeaderboardDisplayName string `json:"leaderboard_title" example:"My First Leaderboard" doc:"Leaderboard title for associated submission."`
 	LatestLink             string `json:"link" example:"https://www.youtube.com/watch?v=rdx0TPjX1qE" doc:"Latest link for this submission."`
 	Verified               bool   `json:"verified" example:"true" doc:"Current verification status."`
-	SubmitterID            string `json:"submitter_id" example:"hxLZ9Efck" doc:"Submitter id."`
+	SubmitterID            string `json:"submitter_id" format:"uuid" example:"146b2edf-2d6f-4775-9b86-5537a2649589" doc:"Submitter id."`
 	SubmitterUsername      string `json:"username" example:"greensuigi" doc:"Submitter username."`
 }
 
@@ -116,6 +131,10 @@ type LeaderboardInfoResponse struct {
 }
 type SubmissionResponse struct {
 	Body SubmissionResponseBody
+}
+
+type HistoryResponse struct {
+	Body HistoryResponseBody
 }
 
 type LeaderboardPostResponse struct {

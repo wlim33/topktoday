@@ -2,14 +2,29 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"time"
 
 	_ "embed"
 
+	"github.com/gofrs/uuid/v5"
+	pgxuuid "github.com/jackc/pgx-gofrs-uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
+
+type DBConn interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, optionsAndArgs ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, optionsAndArgs ...any) pgx.Row
+}
+type DB struct {
+	conn DBConn
+}
 
 type LeaderboardConfig struct {
 	Title               string  `json:"title" example:"My First Leaderboard" doc:"Leaderboard title"`
@@ -20,15 +35,16 @@ type LeaderboardConfig struct {
 	Start               *string `json:"start,omitempty" format:"date-time" example:"2024-09-05T14\:35" doc:"Datetime when the leaderboard opens. Default is at time of leaderboard creation."`
 }
 
-type Storage struct {
-	db *pgxpool.Pool
+type HistoryEntry struct {
+	Comment       string    `json:"comment"`
+	TimeSubmitted time.Time `json:"submitted_at"`
+	Author        User      `json:"author"`
+	Action        string    `json:"action"`
 }
 
 type Ranking struct {
-	rawID int
-
 	User          `json:"user"`
-	ID            string    `json:"id"`
+	ID            uuid.UUID `json:"id"`
 	Score         int       `json:"score"`
 	TimeSubmitted time.Time `json:"submitted_at"`
 	Verified      bool      `json:"verified"`
@@ -41,26 +57,33 @@ type User struct {
 }
 
 type LeaderboardInfo struct {
-	rawID               int
-	ID                  string         `json:"id"`
-	Title               string         `json:"title" example:"My First Leaderboard" doc:"Leaderboard title for associated submission."`
-	Verifiers           []User         `json:"verifiers,omitempty"`
-	TimeCreated         *time.Time     `json:"created_at"`
-	StartTime           *time.Time     `json:"start"`
-	Duration            *time.Duration `json:"duration,omitempty"`
-	HighestFirst        bool           `json:"highest_first"`
-	IsTime              bool           `json:"is_time"`
-	MultipleSubmissions bool           `json:"allow_multiple"`
+	ID                  uuid.UUID     `json:"id"`
+	Title               string        `json:"title" example:"My First Leaderboard" doc:"Leaderboard title for associated submission."`
+	Verifiers           []User        `json:"verifiers,omitempty"`
+	TimeCreated         time.Time     `json:"created_at"`
+	StartTime           time.Time     `json:"start"`
+	Duration            time.Duration `json:"duration"`
+	HighestFirst        bool          `json:"highest_first"`
+	IsTime              bool          `json:"is_time"`
+	MultipleSubmissions bool          `json:"allow_multiple"`
+}
+
+func (li LeaderboardInfo) MarshalJSON() ([]byte, error) {
+	type Alias LeaderboardInfo
+	return json.Marshal(&struct {
+		Duration string `json:"duration"`
+		Alias
+	}{
+		Duration: li.Duration.Round(time.Second).String(),
+		Alias:    (Alias)(li),
+	})
 }
 
 type DetailedSubmission struct {
-	rawID            int
-	rawLeaderboardID int
-
 	Link                   string    `json:"link,omitempty" format:"uri" example:"https://www.youtube.com/watch?v=rdx0TPjX1qE" doc:"Latest link for this submission."`
-	ID                     string    `json:"id,omitempty"`
+	ID                     uuid.UUID `json:"id,omitempty"`
 	Score                  int       `json:"score" example:"12" doc:"Current score of submission."`
-	LeaderboardID          string    `json:"leaderboard_id" example:"EfhxLZ9ck" doc:"9 character leaderboard ID used for querying."`
+	LeaderboardID          uuid.UUID `json:"leaderboard_id" example:"EfhxLZ9ck" doc:"9 character leaderboard ID used for querying."`
 	LeaderboardDisplayName string    `json:"leaderboard_title" example:"My First Leaderboard" doc:"Leaderboard title for associated submission."`
 	Submitter              *User     `json:"submitted_by,omitempty"`
 	TimeCreated            time.Time `json:"last_submitted"`
@@ -70,8 +93,31 @@ type DetailedSubmission struct {
 //go:embed init.sql
 var init_file string
 
-func setupDB(ctx context.Context, connURL string) Storage {
-	db, err := pgxpool.New(ctx, connURL)
+func NewDBConn(ctx context.Context, connURL string) DB {
+	dbconfig, err := pgxpool.ParseConfig(connURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	dbconfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+
+		conn.Exec(ctx, `DROP TABLE IF EXISTS leaderboards, submissions, verifiers, submission_reviews, customers;`)
+		_, err = conn.Exec(ctx, init_file)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pgxuuid.Register(conn.TypeMap())
+
+		dt, err := conn.LoadType(ctx, "submission_action")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		conn.TypeMap().RegisterType(dt)
+
+		return nil
+	}
+	db, err := pgxpool.NewWithConfig(ctx, dbconfig)
+
 	if err != nil {
 		log.Fatal(err)
 	} else {
@@ -79,21 +125,60 @@ func setupDB(ctx context.Context, connURL string) Storage {
 
 	}
 
-	db.Exec(ctx, `DROP TABLE IF EXISTS leaderboards, submissions, verifiers`)
+	return DB{db}
+}
 
-	_, err = db.Exec(ctx, init_file)
-	if err != nil {
-		log.Fatal(err)
+func (db DB) newLeaderboard(ctx context.Context, user_id string, config LeaderboardConfig) (uuid.UUID, error) {
+	var leaderboard_id uuid.UUID
+	if config.Start == nil && config.Duration == nil {
+		err := db.conn.QueryRow(ctx, `
+		WITH ins_leaderboard AS (
+			INSERT INTO leaderboards(created_by, display_name, highest_first, is_time, multiple_submissions) 
+			VALUES ($1, $2, $3, $4, $5)
+			RETURNING id
+		)
+		INSERT INTO verifiers(leaderboard, userid)
+		SELECT id, $1
+		FROM ins_leaderboard
+		RETURNING verifiers.leaderboard
+		`, user_id, config.Title, config.HighestFirst, config.IsTime, config.MultipleSubmissions).Scan(&leaderboard_id)
+
+		return leaderboard_id, err
 	}
-	return Storage{db}
-}
 
-func (st Storage) Close() {
-	st.db.Close()
-}
+	if config.Start == nil && config.Duration != nil {
+		err := db.conn.QueryRow(ctx, `
+		WITH ins_leaderboard AS (
+			INSERT INTO leaderboards(created_by, display_name, highest_first, is_time, multiple_submissions, duration) 
+			VALUES ($1, $2, $3, $4, $5, $6)
+			RETURNING id
+		)
+		INSERT INTO verifiers(leaderboard, userid)
+		SELECT id, $1
+		FROM ins_leaderboard
+		RETURNING verifiers.leaderboard
+		`, user_id, config.Title, config.HighestFirst, config.IsTime, config.MultipleSubmissions, config.Duration).Scan(&leaderboard_id)
 
-func (st Storage) newLeaderboard(ctx context.Context, user_id string, config LeaderboardConfig) (uint64, error) {
-	row := st.db.QueryRow(ctx, `
+		return leaderboard_id, err
+	}
+
+	if config.Start != nil && config.Duration == nil {
+		err := db.conn.QueryRow(ctx, `
+		WITH ins_leaderboard AS (
+			INSERT INTO leaderboards(created_by, display_name, highest_first, is_time, multiple_submissions, start) 
+			VALUES ($1, $2, $3, $4, $5, $6)
+			RETURNING id
+		)
+		INSERT INTO verifiers(leaderboard, userid)
+		SELECT id, $1
+		FROM ins_leaderboard
+		RETURNING verifiers.leaderboard
+		`, user_id, config.Title, config.HighestFirst, config.IsTime, config.MultipleSubmissions, config.Start).Scan(&leaderboard_id)
+
+		return leaderboard_id, err
+	}
+
+	err := db.conn.QueryRow(ctx, `
 		WITH ins_leaderboard AS (
 			INSERT INTO leaderboards(created_by, display_name, highest_first, is_time, start, duration, multiple_submissions) 
 			VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -103,34 +188,83 @@ func (st Storage) newLeaderboard(ctx context.Context, user_id string, config Lea
 		SELECT id, $1
 		FROM ins_leaderboard
 		RETURNING verifiers.leaderboard
-		`, user_id, config.Title, config.HighestFirst, config.IsTime, config.Start, config.Duration, config.MultipleSubmissions)
-	var leaderboard_id uint64
-	err := row.Scan(&leaderboard_id)
+		`, user_id, config.Title, config.HighestFirst, config.IsTime, config.Start, config.Duration, config.MultipleSubmissions).Scan(&leaderboard_id)
+
+	return leaderboard_id, err
+}
+
+func (db DB) getSubmissionHistory(ctx context.Context, submission uuid.UUID) ([]HistoryEntry, error) {
+	rows, err := db.conn.Query(ctx, `
+		SELECT "user".id, "user".name, submission_updates.created_at, comment, action
+		FROM submission_updates
+		LEFT JOIN "user"
+		ON "user".id=submission_updates.author
+		WHERE submission_updates.submission=$1
+		ORDER BY 
+			submission_updates.created_at DESC
+		LIMIT 25
+		`, submission)
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	history := []HistoryEntry{}
+
+	for rows.Next() {
+		var entry HistoryEntry
+		var author User
+		if err := rows.Scan(&author.ID, &author.Username, &entry.TimeSubmitted, &entry.Comment, &entry.Action); err != nil {
+			return nil, err
+		}
+		entry.Author = author
+		history = append(history, entry)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return history, err
+
+}
+func (db DB) addSubmissionComment(ctx context.Context, leaderboard uuid.UUID, submission uuid.UUID, author string, comment string) error {
+
+	_, err := db.conn.Exec(ctx, `
+		INSERT INTO submission_updates(submission, author, comment, action)
+		SELECT $2, $3, $4, 'comment'
+		WHERE EXISTS(SELECT 1 from verifiers WHERE verifiers.leaderboard=$1 
+			AND (verifiers.userid=$3 OR EXISTS(SELECT 1 FROM submissions WHERE submissions.id=$2 AND submissions.userid=$3)))
+		`, leaderboard, submission, author, comment)
 
 	if err != nil {
 		log.Println(err)
 	}
-	return leaderboard_id, err
+	return err
 }
 
-func (st Storage) verifyScore(ctx context.Context, leaderboard uint64, submission uint64, owner string, is_valid bool) (uint64, error) {
-	var submission_id uint64
-	err := st.db.QueryRow(ctx, `
+func (db DB) verifyScore(ctx context.Context, leaderboard uuid.UUID, submission uuid.UUID, author string, is_valid bool, comment string) (int64, error) {
+
+	result, err := db.conn.Exec(ctx, `
+		WITH insert_history AS (
+			INSERT INTO submission_updates(submission, author, comment, action)
+			VALUES ($2, $3, $5, 'validate')
+		)
 		UPDATE submissions
 		SET verified=$4
-		WHERE leaderboard=$1 AND id=$2 AND EXISTS(SELECT 1 FROM verifiers WHERE leaderboard=$1 AND userid=$3)
-		RETURNING id
-		`, leaderboard, submission, owner, is_valid).Scan(&submission_id)
+		WHERE submissions.leaderboard=$1
+			AND submissions.id=$2 
+			AND EXISTS(SELECT 1 FROM verifiers WHERE verifiers.leaderboard=$1 AND verifiers.userid=$3)
+		`, leaderboard, submission, author, is_valid, comment)
+
 	if err != nil {
-		return 0, err
+		log.Println(err)
 	}
-	return submission_id, nil
+	return result.RowsAffected(), nil
 }
 
-func (st Storage) getSubmissionInfo(ctx context.Context, leaderboard uint64, submission uint64) (DetailedSubmission, error) {
+func (db DB) getSubmissionInfo(ctx context.Context, leaderboard uuid.UUID, submission uuid.UUID) (DetailedSubmission, error) {
 	var submissionInfo DetailedSubmission
 	var submitter User
-	err := st.db.QueryRow(ctx, `
+	err := db.conn.QueryRow(ctx, `
 		SELECT submissions.created_at, submissions.score, submissions.link, submissions.leaderboard, leaderboards.display_name, "user".name, "user".id, submissions.verified
 		FROM submissions
 		LEFT JOIN leaderboards
@@ -141,7 +275,7 @@ func (st Storage) getSubmissionInfo(ctx context.Context, leaderboard uint64, sub
 		`, leaderboard, submission).Scan(&submissionInfo.TimeCreated,
 		&submissionInfo.Score,
 		&submissionInfo.Link,
-		&submissionInfo.rawLeaderboardID,
+		&submissionInfo.LeaderboardID,
 		&submissionInfo.LeaderboardDisplayName,
 		&submitter.Username,
 		&submitter.ID,
@@ -153,23 +287,23 @@ func (st Storage) getSubmissionInfo(ctx context.Context, leaderboard uint64, sub
 	return submissionInfo, nil
 }
 
-func (st Storage) newSubmission(ctx context.Context, leaderboard uint64, user string, score int, link string) (uint64, error) {
-	var submission_id uint64
-	err := st.db.QueryRow(ctx, `
+func (db DB) newSubmission(ctx context.Context, leaderboard uuid.UUID, user string, score int, link string) (uuid.UUID, error) {
+	var submission_id uuid.UUID
+	err := db.conn.QueryRow(ctx, `
 		INSERT INTO submissions (leaderboard, userid, score, link)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id
 		`, leaderboard, user, score, link).Scan(&submission_id)
 	if err != nil {
-		return 0, err
+		log.Println(err)
 	}
 	return submission_id, nil
 }
 
-func (st Storage) updateSubmissionScore(ctx context.Context, leaderboard uint64, submission uint64, score int, link string) (uint64, error) {
-	var submission_id uint64
+func (db DB) updateSubmissionScore(ctx context.Context, leaderboard uuid.UUID, submission uuid.UUID, score int, link string) (uuid.UUID, error) {
+	var submission_id uuid.UUID
 
-	err := st.db.QueryRow(ctx, `
+	err := db.conn.QueryRow(ctx, `
 		UPDATE submissions
 		SET
 			score=$3,
@@ -180,19 +314,18 @@ func (st Storage) updateSubmissionScore(ctx context.Context, leaderboard uint64,
 		`, leaderboard, submission, score, link).Scan(&submission_id)
 
 	if err != nil {
-		return 0, err
+		return uuid.UUID{}, err
 	}
 	return submission_id, nil
 }
 
-func (st Storage) getLeaderboardInfo(ctx context.Context, leaderboard uint64) (LeaderboardInfo, error) {
-
+func (db DB) getLeaderboardInfo(ctx context.Context, leaderboard uuid.UUID) (LeaderboardInfo, error) {
 	var info LeaderboardInfo
-	err := st.db.QueryRow(ctx, `
-		SELECT display_name, start, duration, is_time, multiple_submissions, highest_first
+	err := db.conn.QueryRow(ctx, `
+		SELECT display_name, start, duration, is_time, multiple_submissions, highest_first, created_at
 		FROM leaderboards 
 		WHERE id=$1;
-		`, leaderboard).Scan(&info.Title, &info.StartTime, &info.Duration, &info.IsTime, &info.MultipleSubmissions, &info.HighestFirst)
+		`, leaderboard).Scan(&info.Title, &info.StartTime, &info.Duration, &info.IsTime, &info.MultipleSubmissions, &info.HighestFirst, &info.TimeCreated)
 
 	if err != nil {
 		return info, err
@@ -200,8 +333,8 @@ func (st Storage) getLeaderboardInfo(ctx context.Context, leaderboard uint64) (L
 	return info, nil
 }
 
-func (st Storage) getVerifiers(ctx context.Context, leaderboard_id uint64) ([]User, error) {
-	rows, err := st.db.Query(ctx, `
+func (db DB) getVerifiers(ctx context.Context, leaderboard_id uuid.UUID) ([]User, error) {
+	rows, err := db.conn.Query(ctx, `
 		SELECT "user".id, "user".name, verifiers.added_at
 		FROM verifiers
 		LEFT JOIN "user"
@@ -231,8 +364,8 @@ func (st Storage) getVerifiers(ctx context.Context, leaderboard_id uint64) ([]Us
 	return owners, err
 }
 
-func (st Storage) getUserLeaderboards(ctx context.Context, user_id string) ([]LeaderboardInfo, error) {
-	rows, err := st.db.Query(ctx, `
+func (db DB) getAccountLeaderboards(ctx context.Context, user_id string) ([]LeaderboardInfo, error) {
+	rows, err := db.conn.Query(ctx, `
 		SELECT id, display_name, created_at
 		FROM leaderboards
 		WHERE created_by=$1
@@ -249,7 +382,7 @@ func (st Storage) getUserLeaderboards(ctx context.Context, user_id string) ([]Le
 
 	for rows.Next() {
 		var li LeaderboardInfo
-		if err := rows.Scan(&li.rawID, &li.Title, &li.TimeCreated); err != nil {
+		if err := rows.Scan(&li.ID, &li.Title, &li.TimeCreated); err != nil {
 			return leaderboards, err
 		}
 		leaderboards = append(leaderboards, li)
@@ -260,8 +393,8 @@ func (st Storage) getUserLeaderboards(ctx context.Context, user_id string) ([]Le
 	return leaderboards, err
 }
 
-func (st Storage) getUserSubmissions(ctx context.Context, user_id string) ([]DetailedSubmission, error) {
-	rows, err := st.db.Query(ctx, `
+func (db DB) getAccountSubmissions(ctx context.Context, user_id string) ([]DetailedSubmission, error) {
+	rows, err := db.conn.Query(ctx, `
 		SELECT submissions.id, leaderboards.display_name, submissions.created_at, submissions.score, leaderboards.id
 		FROM submissions
 		LEFT JOIN leaderboards
@@ -280,7 +413,7 @@ func (st Storage) getUserSubmissions(ctx context.Context, user_id string) ([]Det
 
 	for rows.Next() {
 		var s DetailedSubmission
-		if err := rows.Scan(&s.rawID, &s.LeaderboardDisplayName, &s.TimeCreated, &s.Score, &s.rawLeaderboardID); err != nil {
+		if err := rows.Scan(&s.ID, &s.LeaderboardDisplayName, &s.TimeCreated, &s.Score, &s.LeaderboardID); err != nil {
 			return submissions, err
 		}
 		submissions = append(submissions, s)
@@ -291,8 +424,8 @@ func (st Storage) getUserSubmissions(ctx context.Context, user_id string) ([]Det
 	return submissions, err
 }
 
-func (st Storage) getLeaderboard(ctx context.Context, leaderboard uint64) ([]Ranking, error) {
-	rows, err := st.db.Query(ctx, `
+func (db DB) getLeaderboard(ctx context.Context, leaderboard uuid.UUID) ([]Ranking, error) {
+	rows, err := db.conn.Query(ctx, `
 		WITH leaderboard_config(cutoff, highest_first) AS (
 			SELECT
 				CASE WHEN duration is NULL THEN NULL
@@ -323,7 +456,7 @@ func (st Storage) getLeaderboard(ctx context.Context, leaderboard uint64) ([]Ran
 	for rows.Next() {
 		var e Ranking
 		var user User
-		if err := rows.Scan(&user.ID, &e.Score, &e.TimeSubmitted, &e.Verified, &e.rawID, &user.Username); err != nil {
+		if err := rows.Scan(&user.ID, &e.Score, &e.TimeSubmitted, &e.Verified, &e.ID, &user.Username); err != nil {
 			return entries, err
 		}
 		e.User = user
@@ -335,9 +468,9 @@ func (st Storage) getLeaderboard(ctx context.Context, leaderboard uint64) ([]Ran
 	return entries, err
 }
 
-func (st Storage) linkAccounts(ctx context.Context, anon_id string, user_id string) error {
+func (db DB) linkAccounts(ctx context.Context, anon_id string, user_id string) error {
 
-	tx, err := st.db.Begin(ctx)
+	tx, err := db.conn.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -374,33 +507,71 @@ func (st Storage) linkAccounts(ctx context.Context, anon_id string, user_id stri
 	return commit_err
 }
 
-func (st Storage) getActiveLeaderboardCount(ctx context.Context, user_id string) (int, error) {
+func (db DB) getActiveLeaderboardCount(ctx context.Context, user_id string) (int, error) {
 	var rowCount int
-	err := st.db.QueryRow(ctx, `
+	err := db.conn.QueryRow(ctx, `
 		SELECT COUNT(*)
 		FROM leaderboards
 		WHERE created_by=$1 AND (start + duration > NOW() OR duration is NULL)
 		`, user_id).Scan(&rowCount)
-	return rowCount, err
+	if err != nil {
+		return -1, err
+	}
+	return rowCount, nil
 
 }
 
-func (st Storage) createTestUser(ctx context.Context, id string, name string, email string, is_anonymous bool, customer_info CustomerInfo) error {
-	_, err := st.db.Exec(ctx, `
-		WITH first AS (
+func (db DB) createTestUser(ctx context.Context, id string, name string, email string, is_anonymous bool, customer_info CustomerInfo) error {
+
+	tx, err := db.conn.Begin(ctx)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	defer tx.Rollback(ctx)
+	_, tx_err := tx.Exec(ctx, `DELETE FROM customers WHERE customer_id=$1`, customer_info.id)
+	if tx_err != nil {
+
+		log.Println(tx_err)
+		return tx_err
+	}
+
+	_, tx_err = tx.Exec(ctx, `DELETE FROM "session" WHERE "userId"=$1`, id)
+	if tx_err != nil {
+		log.Println(tx_err)
+		return tx_err
+	}
+
+	_, tx_err = tx.Exec(ctx, `DELETE FROM "user" WHERE name=$1 OR email=$2`, name, email)
+	if tx_err != nil {
+		log.Println(tx_err)
+		return tx_err
+	}
+
+	_, tx_err = tx.Exec(ctx, `
 			INSERT INTO "user"(id, name, email, "emailVerified", "createdAt", "updatedAt", "isAnonymous")
 			VALUES ($1, $2, $3, FALSE, NOW(), NOW(), $4)
-			ON CONFLICT DO NOTHING
-		)
+		`, id, name, email, is_anonymous)
+	if tx_err != nil {
+		log.Println(tx_err)
+		return tx_err
+	}
+
+	_, tx_err = tx.Exec(ctx, `
 		INSERT INTO customers(userid, customer_id)
-		VALUES ($1, $5)
-		ON CONFLICT DO NOTHING;
-		`, id, name, email, is_anonymous, customer_info.id)
-	return err
+		VALUES ($1, $2) 
+		`, id, customer_info.id)
+	if tx_err != nil {
+		log.Println(tx_err)
+		return tx_err
+	}
+	commit_err := tx.Commit(ctx)
+	return commit_err
 }
 
-func (st Storage) getCustomer(ctx context.Context, id string) (CustomerInfo, error) {
-	row := st.db.QueryRow(ctx, `
+func (db DB) getCustomer(ctx context.Context, id string) (CustomerInfo, error) {
+	row := db.conn.QueryRow(ctx, `
 		SELECT customer_id, status
 		FROM customers
 		WHERE userid=$1
@@ -414,8 +585,8 @@ func (st Storage) getCustomer(ctx context.Context, id string) (CustomerInfo, err
 	return customer, nil
 }
 
-func (st Storage) updateSubscription(ctx context.Context, user_id string, attributes *CustomerAttributes) error {
-	_, err := st.db.Exec(ctx, `
+func (db DB) updateSubscription(ctx context.Context, user_id string, attributes *CustomerAttributes) error {
+	_, err := db.conn.Exec(ctx, `
 		INSERT INTO customers(userid, customer_id, order_id, order_item_id, product_id, variant_id, user_name, user_email, status, status_formatted)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (userid, customer_id) DO UPDATE 
@@ -443,14 +614,13 @@ func (st Storage) updateSubscription(ctx context.Context, user_id string, attrib
 	return err
 }
 
-func (st Storage) getLastUpdatedTime(ctx context.Context, leaderboard_id uint64) (time.Time, error) {
+func (db DB) getLastUpdatedTime(ctx context.Context, leaderboard_id uuid.UUID) (time.Time, error) {
 	var lastUpdated time.Time
-	err := st.db.QueryRow(ctx, `
+	err := db.conn.QueryRow(ctx, `
 		SELECT last_updated
 		FROM leaderboards
 		WHERE id=$1
 		`, leaderboard_id).Scan(&lastUpdated)
 
 	return lastUpdated, err
-
 }
