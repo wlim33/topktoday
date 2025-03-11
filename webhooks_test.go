@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -117,17 +119,18 @@ const webhook_payload = `
 	`
 
 func TestWebhook(t *testing.T) {
-	key := "test_signing_key"
-	api := setupTestWebhookAPI(t, key)
+	const signing_key = "testsigningkey"
+	WithAppSigningKey(t, signing_key, func(ctx context.Context, api humatest.TestAPI, users map[string]string) {
 
-	hash := hmac.New(sha256.New, []byte(key))
-	hash.Write([]byte(webhook_payload))
+		hash := hmac.New(sha256.New, []byte(signing_key))
+		hash.Write([]byte(webhook_payload))
 
-	resp := api.Post("/webhooks/lemon_squeezy",
-		"Content-Type: application/json",
-		"X-Event-Name: order_created",
-		fmt.Sprintf("X-Signature: %s", hex.EncodeToString(hash.Sum(nil))),
-		strings.NewReader(webhook_payload))
+		resp := api.Post("/webhooks/lemon_squeezy",
+			"Content-Type: application/json",
+			"X-Event-Name: order_created",
+			fmt.Sprintf("X-Signature: %s", hex.EncodeToString(hash.Sum(nil))),
+			strings.NewReader(webhook_payload))
 
-	assert.Equal(t, 200, resp.Code)
+		assert.Equal(t, 200, resp.Code)
+	})
 }

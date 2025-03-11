@@ -30,9 +30,9 @@ func (app *App) CustomerMiddleware(ctx huma.Context, next func(huma.Context)) {
 
 		ctx = huma.WithValue(ctx, CUSTOMER_CONTEXT_KEY, &customer)
 
-		next(ctx)
-
 	}
+
+	next(ctx)
 }
 
 func (app *App) getUsage(ctx context.Context, subscription_id int) error {

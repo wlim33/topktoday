@@ -17,6 +17,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/humacli"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
+	"github.com/gofrs/uuid/v5"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/spf13/cobra"
 	"github.com/sqids/sqids-go"
@@ -40,53 +41,6 @@ type IDParser struct {
 	leaderboards *sqids.Sqids
 }
 
-func NewParser() IDParser {
-	var p IDParser
-	if s, err := sqids.New(sqids.Options{
-		Alphabet:  "k3G7QAe51FCsPW92uEOyq4Bg6Sp8YzVTmnU0liwDdHXLajZrfxNhobJIRcMvKt",
-		MinLength: uint8(id_length)}); err != nil {
-		log.Fatalf("Failed to construct parser: %s", err)
-	} else {
-		p.submissions = s
-	}
-
-	if s, err := sqids.New(sqids.Options{
-		Alphabet:  "liwDdHXLajZrfxNhobJIRcMvKtk3G7QAe51FCsPW92uEOyq4Bg6Sp8YzVTmnU0",
-		MinLength: uint8(id_length)}); err != nil {
-
-		log.Fatalf("Failed to construct parser: %s", err)
-	} else {
-		p.leaderboards = s
-	}
-	return p
-}
-
-func (p IDParser) decodeSubmissionID(raw_id string) uint64 {
-	submission_id := p.submissions.Decode(raw_id)
-	return submission_id[0]
-}
-
-func (p IDParser) decodeLeaderboardID(raw_id string) uint64 {
-	leaderboard_id := p.leaderboards.Decode(raw_id)
-	return leaderboard_id[0]
-}
-
-func (p IDParser) encodeSubmissionID(id uint64) string {
-	raw, err := p.submissions.Encode([]uint64{id})
-	if err != nil {
-		log.Println("Parse error: %", err)
-	}
-	return raw
-}
-
-func (p IDParser) encodeLeaderboardID(id uint64) string {
-	raw, err := p.leaderboards.Encode([]uint64{id})
-	if err != nil {
-		log.Println("Parse error: %", err)
-	}
-	return raw
-}
-
 func OpenAPIGenConfig() huma.Config {
 	config := huma.DefaultConfig("leaderapi", VERSION)
 	url := "https://api.topktoday.dev"
@@ -104,12 +58,11 @@ type App struct {
 	*http.Server
 	projectID   string
 	log         *logging.Logger
-	st          Storage
-	parser      IDParser
+	st          DB
 	api         huma.API
 	webhookHash hash.Hash
 	lsApiKey    string
-	cache       *lru.TwoQueueCache[string, *LeaderboardResponse]
+	cache       *lru.TwoQueueCache[uuid.UUID, *LeaderboardResponse]
 }
 
 func (app *App) addRoutes(api huma.API) {
@@ -134,8 +87,10 @@ func (app *App) addRoutes(api huma.API) {
 	// Submissions
 	huma.Post(api, "/leaderboard/{leaderboard_id}/submission", app.postNewScore)
 	huma.Get(api, "/leaderboard/{leaderboard_id}/submission/{submission_id}", app.getSubmission)
+	huma.Get(api, "/leaderboard/{leaderboard_id}/submission/{submission_id}/history", app.GetSubmissionHistory)
 	huma.Patch(api, "/leaderboard/{leaderboard_id}/submission/{submission_id}/score", app.updateSubmission)
 	huma.Patch(api, "/leaderboard/{leaderboard_id}/submission/{submission_id}/verify", app.VerifyScore)
+	huma.Post(api, "/leaderboard/{leaderboard_id}/submission/{submission_id}/comment", app.AddSubmissionComment)
 
 	// Accounts
 	huma.Get(api, "/account/{user_id}/leaderboards", app.getAccountLeaderboards)
@@ -166,7 +121,6 @@ func main() {
 	port, db_url, ls_secret, api_key := os.Getenv("PORT"), os.Getenv("DB_URL"), os.Getenv("LS_SECRET"), os.Getenv("PAYMENT_API_KEY")
 	app := App{
 		log:         &logging.Logger{},
-		parser:      NewParser(),
 		webhookHash: hmac.New(sha256.New, []byte(ls_secret)),
 		lsApiKey:    api_key,
 		cache:       initCache(),
@@ -200,7 +154,7 @@ func main() {
 
 		hooks.OnStart(func() {
 			// Start your server here
-			app.st = setupDB(context.Background(), db_url)
+			app.st = NewDBConn(context.Background(), db_url)
 
 			if err := http.ListenAndServe(":"+port, r); err != nil {
 				log.Fatal(err)
@@ -209,7 +163,6 @@ func main() {
 
 		hooks.OnStop(func() {
 			// Gracefully shutdown your server here
-			app.st.Close()
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			server.Shutdown(ctx)

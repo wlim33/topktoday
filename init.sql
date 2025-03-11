@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS customers (
 );
 
 CREATE TABLE IF NOT EXISTS leaderboards (
-	id INT GENERATED ALWAYS AS IDENTITY UNIQUE,
+	id UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
 	created_by TEXT REFERENCES "user"(id) ON UPDATE CASCADE,
 	display_name TEXT,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -30,20 +30,18 @@ CREATE TABLE IF NOT EXISTS leaderboards (
 	highest_first BOOLEAN NOT NULL DEFAULT TRUE,
 	is_time BOOLEAN NOT NULL DEFAULT FALSE,
 	uses_verification BOOLEAN NOT NULL DEFAULT FALSE,
-	duration INTERVAL,
-	start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	duration INTERVAL DEFAULT INTERVAL '1 day' NOT NULL,
+	start TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	multiple_submissions BOOLEAN DEFAULT TRUE,
 	PRIMARY KEY(id, created_by)
 );
 
 
-CREATE INDEX lb_id ON leaderboards (id) INCLUDE (id, created_by, display_name, created_at, last_updated, highest_first, is_time, uses_verification, duration, start, multiple_submissions);
-
 
 
 CREATE TABLE IF NOT EXISTS submissions (
-	id INT GENERATED ALWAYS AS IDENTITY UNIQUE,
-	leaderboard INT REFERENCES leaderboards(id),
+	id UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+	leaderboard UUID REFERENCES leaderboards(id),
 	userid TEXT REFERENCES "user"(id) ON UPDATE CASCADE,
 	link TEXT,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -53,18 +51,29 @@ CREATE TABLE IF NOT EXISTS submissions (
 	PRIMARY KEY(id, leaderboard, userid)
 );
 
-
-CREATE INDEX lb_score_idx ON submissions (leaderboard, score) INCLUDE (id, userid, link, created_at, score, verified, last_updated);
+DO $$ BEGIN
+	CREATE TYPE submission_action AS ENUM ('validate', 'invalidate', 'comment');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+CREATE TABLE IF NOT EXISTS submission_updates(
+	id UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+	submission UUID REFERENCES submissions(id),
+	author TEXT REFERENCES "user"(id) ON UPDATE CASCADE,
+	comment TEXT,
+	action submission_action NOT NULL,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	PRIMARY KEY(id, submission)
+);
 
 
 CREATE TABLE IF NOT EXISTS verifiers (
-	leaderboard INT REFERENCES leaderboards(id),
+	leaderboard UUID REFERENCES leaderboards(id),
 	userid TEXT REFERENCES "user"(id) ON UPDATE CASCADE,
 	added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	PRIMARY KEY(leaderboard, userid)
 );
 
-CREATE INDEX veferiers_idx ON verifiers (leaderboard) INCLUDE (userid, added_at);
 
 
 CREATE OR REPLACE FUNCTION function_update_timestamp() RETURNS TRIGGER AS
@@ -76,9 +85,14 @@ END;
 $BODY$
 language plpgsql;
 
+DO
+$$BEGIN
+	CREATE TRIGGER trig_update_time
+	     AFTER INSERT OR UPDATE ON submissions
+	     FOR EACH ROW
+	     EXECUTE FUNCTION function_update_timestamp();
 
-CREATE TRIGGER trig_update_time
-     AFTER INSERT OR UPDATE ON submissions
-     FOR EACH ROW
-     EXECUTE FUNCTION function_update_timestamp();
-
+EXCEPTION
+   WHEN duplicate_object THEN
+      NULL;
+END;$$;
