@@ -131,7 +131,7 @@ func TestVerifyScoreNotOwner(t *testing.T) {
 
 		updateResp := api.Patch(
 			fmt.Sprintf("/leaderboard/%s/submission/%s/verify", id, newScoreBody.ID),
-			fmt.Sprintf("UserID: %s", users["Anonymous"]),
+			fmt.Sprintf("UserID: %s", users["Anonymous1"]),
 			map[string]any{
 				"is_valid": true,
 			})
@@ -257,6 +257,112 @@ func TestAddSubmissionCommentFromVerifier(t *testing.T) {
 
 		if lResp, getResp := getSubmissionHistory(t, api, id, newScoreBody.ID); assert.Equal(t, 200, getResp.Code) {
 			assert.Equal(t, 1, len(lResp.History))
+			assert.Equal(t, "comment", lResp.History[0].Action)
+		}
+	})
+}
+
+func TestAddSubmissionInvalidateFromVerifier(t *testing.T) {
+	WithApp(t, func(ctx context.Context, api humatest.TestAPI, users map[string]string) {
+		id := createBasicLeaderboard(t, api, users["player2"])
+
+		postResp := api.Post(
+			fmt.Sprintf("/leaderboard/%s/submission", id),
+			fmt.Sprintf("UserID: %s", users["player3"]),
+			map[string]any{
+				"link":  "www.youtube.com",
+				"score": 9,
+			})
+
+		assert.Equal(t, 200, postResp.Code)
+
+		var newScoreBody SubmissionResponseBody
+		json.Unmarshal(postResp.Body.Bytes(), &newScoreBody)
+
+		assert.Equal(t, 200, postResp.Code)
+		postResp2 := api.Patch(
+			fmt.Sprintf("/leaderboard/%s/submission/%s/verify", id, newScoreBody.ID),
+			fmt.Sprintf("UserID: %s", users["player2"]),
+			map[string]any{
+				"comment":  "Great Job!",
+				"is_valid": false,
+			})
+
+		assert.Equal(t, 200, postResp2.Code)
+
+		if lResp, getResp := getSubmissionHistory(t, api, id, newScoreBody.ID); assert.Equal(t, 200, getResp.Code) {
+			assert.Equal(t, 1, len(lResp.History))
+			assert.Equal(t, "invalidate", lResp.History[0].Action)
+		}
+	})
+}
+
+func TestGetSubmissionHistory(t *testing.T) {
+	WithApp(t, func(ctx context.Context, api humatest.TestAPI, users map[string]string) {
+		id := createBasicLeaderboard(t, api, users["player2"])
+
+		postResp := api.Post(
+			fmt.Sprintf("/leaderboard/%s/submission", id),
+			fmt.Sprintf("UserID: %s", users["player3"]),
+			map[string]any{
+				"link":  "www.youtube.com",
+				"score": 9,
+			})
+
+		assert.Equal(t, 200, postResp.Code)
+
+		var newScoreBody SubmissionResponseBody
+		json.Unmarshal(postResp.Body.Bytes(), &newScoreBody)
+
+		assert.Equal(t, 200, postResp.Code)
+		postResp2 := api.Post(
+			fmt.Sprintf("/leaderboard/%s/submission/%s/comment", id, newScoreBody.ID),
+			fmt.Sprintf("UserID: %s", users["player2"]),
+			map[string]any{
+				"comment": "Needs work.",
+			})
+
+		assert.Equal(t, 200, postResp2.Code)
+
+		if lResp, getResp := getSubmissionHistory(t, api, id, newScoreBody.ID); assert.Equal(t, 200, getResp.Code) {
+			assert.Equal(t, 1, len(lResp.History))
+			assert.Equal(t, "comment", lResp.History[0].Action)
+		}
+		assert.Equal(t, 200, postResp.Code)
+		validateResp := api.Patch(
+			fmt.Sprintf("/leaderboard/%s/submission/%s/verify", id, newScoreBody.ID),
+			fmt.Sprintf("UserID: %s", users["player2"]),
+			map[string]any{
+				"is_valid": true,
+				"comment":  "Great Job!",
+			})
+
+		assert.Equal(t, 200, validateResp.Code)
+
+		if lResp, getResp := getSubmissionHistory(t, api, id, newScoreBody.ID); assert.Equal(t, 200, getResp.Code) {
+			assert.Equal(t, 2, len(lResp.History))
+		}
+
+		if lResp, getResp := getSubmissionDetailed(t, api, id, newScoreBody.ID); assert.Equal(t, 200, getResp.Code) {
+			assert.True(t, lResp.Verified)
+		}
+
+		invalidateResp := api.Patch(
+			fmt.Sprintf("/leaderboard/%s/submission/%s/verify", id, newScoreBody.ID),
+			fmt.Sprintf("UserID: %s", users["player2"]),
+			map[string]any{
+				"is_valid": false,
+				"comment":  "Caught Cheating",
+			})
+
+		assert.Equal(t, 200, invalidateResp.Code)
+
+		if lResp, getResp := getSubmissionHistory(t, api, id, newScoreBody.ID); assert.Equal(t, 200, getResp.Code) {
+			assert.Equal(t, 3, len(lResp.History))
+		}
+
+		if lResp, getResp := getSubmissionDetailed(t, api, id, newScoreBody.ID); assert.Equal(t, 200, getResp.Code) {
+			assert.False(t, lResp.Verified)
 		}
 	})
 }

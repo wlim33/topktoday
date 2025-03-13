@@ -100,7 +100,7 @@ func NewDBConn(ctx context.Context, connURL string) DB {
 	}
 	dbconfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
 
-		conn.Exec(ctx, `DROP TABLE IF EXISTS leaderboards, submissions, verifiers, submission_reviews, customers;`)
+		// conn.Exec(ctx, `DROP TABLE IF EXISTS leaderboards, submissions, verifiers, submission_updates, customers;`)
 		_, err = conn.Exec(ctx, init_file)
 		if err != nil {
 			log.Fatal(err)
@@ -231,8 +231,7 @@ func (db DB) addSubmissionComment(ctx context.Context, leaderboard uuid.UUID, su
 	_, err := db.conn.Exec(ctx, `
 		INSERT INTO submission_updates(submission, author, comment, action)
 		SELECT $2, $3, $4, 'comment'
-		WHERE EXISTS(SELECT 1 from verifiers WHERE verifiers.leaderboard=$1 
-			AND (verifiers.userid=$3 OR EXISTS(SELECT 1 FROM submissions WHERE submissions.id=$2 AND submissions.userid=$3)))
+		WHERE EXISTS(SELECT 1 from verifiers WHERE verifiers.leaderboard=$1 AND verifiers.userid=$3)
 		`, leaderboard, submission, author, comment)
 
 	if err != nil {
@@ -246,7 +245,7 @@ func (db DB) verifyScore(ctx context.Context, leaderboard uuid.UUID, submission 
 	result, err := db.conn.Exec(ctx, `
 		WITH insert_history AS (
 			INSERT INTO submission_updates(submission, author, comment, action)
-			VALUES ($2, $3, $5, 'validate')
+			VALUES ($2, $3, $5, CAST(CASE WHEN $4 Then 'validate' ELSE 'invalidate' END AS submission_action))
 		)
 		UPDATE submissions
 		SET verified=$4
@@ -533,19 +532,19 @@ func (db DB) createTestUser(ctx context.Context, id string, name string, email s
 	_, tx_err := tx.Exec(ctx, `DELETE FROM customers WHERE customer_id=$1`, customer_info.id)
 	if tx_err != nil {
 
-		log.Println(tx_err)
+		log.Println("Couldn't clear from customers table", tx_err)
 		return tx_err
 	}
 
 	_, tx_err = tx.Exec(ctx, `DELETE FROM "session" WHERE "userId"=$1`, id)
 	if tx_err != nil {
-		log.Println(tx_err)
+		log.Println("Couldn't clear from session table", tx_err)
 		return tx_err
 	}
 
 	_, tx_err = tx.Exec(ctx, `DELETE FROM "user" WHERE name=$1 OR email=$2`, name, email)
 	if tx_err != nil {
-		log.Println(tx_err)
+		log.Println("Couldn't clear from user table", tx_err)
 		return tx_err
 	}
 

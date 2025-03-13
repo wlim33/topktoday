@@ -49,7 +49,7 @@ func TestGetUserLeaderboards(t *testing.T) {
 func TestGetUserSubmissions(t *testing.T) {
 	WithApp(t, func(ctx context.Context, api humatest.TestAPI, users map[string]string) {
 
-		id := createBasicLeaderboard(t, api, users["Anonymous"])
+		id := createBasicLeaderboard(t, api, users["Anonymous1"])
 
 		subResp := api.Post(
 			fmt.Sprintf("/leaderboard/%s/submission", id),
@@ -85,7 +85,7 @@ func TestGetUserSubmissions(t *testing.T) {
 func TestLinkAnonymousAccount(t *testing.T) {
 	WithApp(t, func(ctx context.Context, api humatest.TestAPI, users map[string]string) {
 
-		id := createBasicLeaderboard(t, api, users["Anonymous"])
+		id := createBasicLeaderboard(t, api, users["Anonymous1"])
 
 		if lResp, getResp := getLeaderboard(t, api, id); assert.Equal(t, 200, getResp.Code) {
 			assert.Zero(t, len(lResp.Scores))
@@ -93,7 +93,7 @@ func TestLinkAnonymousAccount(t *testing.T) {
 
 		postResp2 := api.Post(
 			fmt.Sprintf("/leaderboard/%s/submission", id),
-			fmt.Sprintf("UserID: %s", users["Anonymous"]),
+			fmt.Sprintf("UserID: %s", users["Anonymous1"]),
 			map[string]any{
 				"score": 10,
 				"link":  "www.youtube.com",
@@ -105,7 +105,7 @@ func TestLinkAnonymousAccount(t *testing.T) {
 			"/account/link_anonymous",
 			fmt.Sprintf("UserID: %s", users["player2"]),
 			map[string]any{
-				"anon_id": users["Anonymous"],
+				"anon_id": users["Anonymous1"],
 			})
 
 		assert.Equal(t, 200, linkResponse.Code)

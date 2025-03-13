@@ -36,7 +36,7 @@ func setupTestData(ctx context.Context, signing_key string, tx pgx.Tx) (App, Tes
 	testCtx.users["player1"] = "meow-player1"
 	testCtx.users["player2"] = "meow-player2"
 	testCtx.users["player3"] = "meow-player3"
-	testCtx.users["Anonymous"] = "meow-Anonymous"
+	testCtx.users["Anonymous1"] = "meow-Anonymous"
 	testCtx.users["Anonymous2"] = "meow-Anonymous2"
 
 	db := DB{
@@ -47,7 +47,7 @@ func setupTestData(ctx context.Context, signing_key string, tx pgx.Tx) (App, Tes
 	}
 	db.createTestUser(ctx, testCtx.users["player2"], "player2", "admin2@admin.admin", false, CustomerInfo{id: ls_test_ids[1], subscription_id: ls_subscription_ids[1]})
 	db.createTestUser(ctx, testCtx.users["player3"], "player3", "admin3@admin.admin", false, CustomerInfo{id: ls_test_ids[2], subscription_id: ls_subscription_ids[2]})
-	db.createTestUser(ctx, testCtx.users["Anonymous"], "Anonymous", "s@anonymous.anonymous", true, CustomerInfo{id: ls_test_ids[3], subscription_id: ls_subscription_ids[3]})
+	db.createTestUser(ctx, testCtx.users["Anonymous1"], "Anonymous1", "s@anonymous.anonymous", true, CustomerInfo{id: ls_test_ids[3], subscription_id: ls_subscription_ids[3]})
 	db.createTestUser(ctx, testCtx.users["Anonymous2"], "Anonymous2", "s2@anonymous.anonymous", true, CustomerInfo{id: ls_test_ids[4], subscription_id: ls_subscription_ids[4]})
 
 	app := App{
