@@ -88,7 +88,7 @@ func (app *App) addRoutes(api huma.API) {
 	huma.Post(api, "/leaderboard/{leaderboard_id}/submission", app.postNewScore)
 	huma.Get(api, "/leaderboard/{leaderboard_id}/submission/{submission_id}", app.getSubmission)
 	huma.Get(api, "/leaderboard/{leaderboard_id}/submission/{submission_id}/history", app.GetSubmissionHistory)
-	huma.Patch(api, "/leaderboard/{leaderboard_id}/submission/{submission_id}/score", app.updateSubmission)
+	// huma.Patch(api, "/leaderboard/{leaderboard_id}/submission/{submission_id}/score", app.updateSubmission)
 	huma.Patch(api, "/leaderboard/{leaderboard_id}/submission/{submission_id}/verify", app.VerifyScore)
 	huma.Post(api, "/leaderboard/{leaderboard_id}/submission/{submission_id}/comment", app.AddSubmissionComment)
 

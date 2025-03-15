@@ -3,12 +3,13 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	pgconn "github.com/jackc/pgx/v5/pgconn"
 )
 
 func (app *App) postNewLeaderboard(ctx context.Context, input *struct {
@@ -37,6 +38,10 @@ func (app *App) postNewLeaderboard(ctx context.Context, input *struct {
 	id, db_err := app.st.newLeaderboard(ctx, input.UserID, input.Body)
 
 	if db_err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(db_err, &pgErr) && pgErr.Code == pgerrcode.CheckViolation {
+			return nil, huma.Error400BadRequest("If provided, end date must be after start date.")
+		}
 		return nil, db_err
 	}
 
@@ -69,7 +74,6 @@ func (app *App) getLeaderboard(ctx context.Context, input *struct {
 	LeaderboardIDParam
 }) (*LeaderboardResponse, error) {
 	last_updated, err := app.st.getLastUpdatedTime(ctx, input.ID)
-	fmt.Println(last_updated)
 	if err != nil {
 		return nil, err
 	}
