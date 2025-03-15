@@ -77,12 +77,12 @@ func benchmarkCreateBasicLeaderboard(api humatest.TestAPI, b *testing.B, userid 
 	resp := api.Post("/leaderboard",
 		fmt.Sprintf("UserID: %s", userid),
 		map[string]any{
-			"title":                "My First Leaderboard",
-			"duration":             "24:01:00",
-			"highest_first":        true,
-			"is_time":              true,
-			"start":                time.Now().Format(time.RFC3339),
-			"multiple_submissions": true,
+			"title":         "My First Leaderboard",
+			"duration":      "24:01:00",
+			"highest_first": true,
+			"is_time":       true,
+			"start":         time.Now().Format(time.RFC3339),
+			"verify":        true,
 		})
 	var newResp NewLeaderboardResponseBody
 	json.Unmarshal(resp.Body.Bytes(), &newResp)
@@ -95,10 +95,11 @@ func createDefaultLeaderboard(t *testing.T, api humatest.TestAPI, userid string)
 	resp := api.Post("/leaderboard",
 		fmt.Sprintf("UserID: %s", userid),
 		map[string]any{
-			"title":                "My Default Leaderboard",
-			"highest_first":        true,
-			"is_time":              true,
-			"multiple_submissions": true,
+			"title":         "My Default Leaderboard",
+			"highest_first": true,
+			"start":         time.Now().Format(time.RFC3339),
+			"is_time":       true,
+			"verify":        true,
 		})
 	assert.Equal(t, 200, resp.Code)
 	var newResp NewLeaderboardResponseBody
@@ -106,18 +107,55 @@ func createDefaultLeaderboard(t *testing.T, api humatest.TestAPI, userid string)
 	return newResp.Id
 }
 
+func createLeaderboardTimeLimit(t *testing.T, api humatest.TestAPI, userid string, start, stop string) uuid.UUID {
+	t.Helper()
+
+	resp := api.Post("/leaderboard",
+		fmt.Sprintf("UserID: %s", userid),
+		map[string]any{
+			"title":         "My First Leaderboard",
+			"highest_first": true,
+			"is_time":       true,
+			"start":         start,
+			"stop":          stop,
+			"verify":        true,
+		})
+	assert.Equal(t, 200, resp.Code)
+	var newResp NewLeaderboardResponseBody
+	json.Unmarshal(resp.Body.Bytes(), &newResp)
+	return newResp.Id
+}
+
+func createVerifiedLeaderboard(t *testing.T, api humatest.TestAPI, userid string) uuid.UUID {
+	t.Helper()
+
+	resp := api.Post("/leaderboard",
+		fmt.Sprintf("UserID: %s", userid),
+		map[string]any{
+			"title":         "My First Leaderboard",
+			"stop":          time.Now().AddDate(0, 1, 0).Format(time.RFC3339),
+			"highest_first": true,
+			"is_time":       true,
+			"start":         time.Now().Format(time.RFC3339),
+			"verify":        true,
+		})
+	assert.Equal(t, 200, resp.Code)
+	var newResp NewLeaderboardResponseBody
+	json.Unmarshal(resp.Body.Bytes(), &newResp)
+	return newResp.Id
+}
 func createBasicLeaderboard(t *testing.T, api humatest.TestAPI, userid string) uuid.UUID {
 	t.Helper()
 
 	resp := api.Post("/leaderboard",
 		fmt.Sprintf("UserID: %s", userid),
 		map[string]any{
-			"title":                "My First Leaderboard",
-			"duration":             "20:01:00",
-			"highest_first":        true,
-			"is_time":              true,
-			"start":                time.Now().Format(time.RFC3339),
-			"multiple_submissions": true,
+			"title":         "My First Leaderboard",
+			"stop":          time.Now().AddDate(0, 1, 0).Format(time.RFC3339),
+			"highest_first": true,
+			"is_time":       true,
+			"start":         time.Now().Format(time.RFC3339),
+			"verify":        false,
 		})
 	assert.Equal(t, 200, resp.Code)
 	var newResp NewLeaderboardResponseBody

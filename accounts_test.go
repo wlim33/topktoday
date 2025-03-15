@@ -35,12 +35,16 @@ func TestGetUserLeaderboards(t *testing.T) {
 		if lResp, getResp := getAccountLeaderboards(t, api, users["player2"]); assert.Equal(t, 200, getResp.Code) {
 			assert.Equal(t, 1, len(lResp.Leaderboards))
 			assert.Equal(t, "My First Leaderboard", lResp.Leaderboards[0].Title)
+			assert.False(t, lResp.Leaderboards[0].TimeCreated.IsZero())
 		}
 
 		createBasicLeaderboard(t, api, users["player2"])
 
 		if lResp, getResp := getAccountLeaderboards(t, api, users["player2"]); assert.Equal(t, 200, getResp.Code) {
 			assert.Equal(t, 2, len(lResp.Leaderboards))
+			assert.Equal(t, 1, lResp.Leaderboards)
+			assert.False(t, lResp.Leaderboards[0].TimeCreated.IsZero())
+			assert.False(t, lResp.Leaderboards[1].TimeCreated.IsZero())
 		}
 	})
 
@@ -63,6 +67,7 @@ func TestGetUserSubmissions(t *testing.T) {
 		if submissionResp, getResp := getAccountSubmissions(t, api, users["player2"]); assert.Equal(t, 200, getResp.Code) {
 			assert.Equal(t, 1, len(submissionResp.Submissions))
 			assert.Equal(t, 10, submissionResp.Submissions[0].Score)
+			assert.False(t, submissionResp.Submissions[0].TimeCreated.IsZero())
 		}
 
 		submissionResp2 := api.Post(
@@ -77,6 +82,8 @@ func TestGetUserSubmissions(t *testing.T) {
 
 		if submissionResp, getResp := getAccountSubmissions(t, api, users["player2"]); assert.Equal(t, 200, getResp.Code) {
 			assert.Equal(t, 2, len(submissionResp.Submissions))
+			assert.False(t, submissionResp.Submissions[0].TimeCreated.IsZero())
+			assert.False(t, submissionResp.Submissions[1].TimeCreated.IsZero())
 		}
 	})
 
@@ -119,17 +126,15 @@ func TestLinkAnonymousAccount(t *testing.T) {
 
 func TestActiveLeaderboardCount(t *testing.T) {
 	WithApp(t, func(ctx context.Context, api humatest.TestAPI, users map[string]string) {
-
 		for i := range 50 {
 			resp := api.Post("/leaderboard",
 				fmt.Sprintf("UserID: %s", users["player2"]),
 				map[string]any{
-					"title":                "My First Leaderboard",
-					"highest_first":        true,
-					"is_time":              true,
-					"duration":             "00:01:00",
-					"start":                "2020-03-05T18:54:00+00:00",
-					"multiple_submissions": true,
+					"title":         "My First Leaderboard",
+					"highest_first": true,
+					"is_time":       true,
+					"start":         "2020-03-05T18:54:00+00:00",
+					"verify":        true,
 				})
 			assert.Equal(t, 200, resp.Code, "Failed to create %s leaderboards", i+1)
 

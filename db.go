@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"time"
 
@@ -11,7 +10,7 @@ import (
 	"github.com/gofrs/uuid/v5"
 	pgxuuid "github.com/jackc/pgx-gofrs-uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
+	pgconn "github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -27,12 +26,12 @@ type DB struct {
 }
 
 type LeaderboardConfig struct {
-	Title               string  `json:"title" example:"My First Leaderboard" doc:"Leaderboard title"`
-	HighestFirst        bool    `json:"highest_first" example:"true" doc:"If true, higher scores/times are ranked higher, e.g. highest score is first, second highest is second."`
-	IsTime              bool    `json:"is_time" example:"false" doc:"If true, leaderboards scores are time values, e.g. 00:32"`
-	MultipleSubmissions bool    `json:"multiple_submissions" example:"true" doc:"If true, a user can show up multiple times on the leaderboard."`
-	Duration            *string `json:"duration,omitempty"  example:"P1D" doc:"Duration the leaderboard accepts submissions, after start date. Default is at time of leaderboard creation."`
-	Start               *string `json:"start,omitempty" format:"date-time" example:"2024-09-05T14\:35" doc:"Datetime when the leaderboard opens. Default is at time of leaderboard creation."`
+	Title        string     `json:"title" example:"My First Leaderboard" doc:"Leaderboard title"`
+	HighestFirst bool       `json:"highest_first" example:"true" doc:"If true, higher scores/times are ranked higher, e.g. highest score is first, second highest is second."`
+	IsTime       bool       `json:"is_time" example:"false" doc:"If true, leaderboards scores are time values, e.g. 00:32"`
+	NeedsVerify  bool       `json:"verify" example:"true" doc:"If true, submissions need to be verified before they show up on the leaderboard."`
+	Stop         *time.Time `json:"stop,omitempty"  format:"date-time" example:"2024-09-05T14\:35" doc:"Datetime when the leaderboard closes. Times before the start value or empty mean the leaderboard accept submissions until the leaderboard is archived."`
+	Start        time.Time  `json:"start" format:"date-time" example:"2024-09-05T14\:35" doc:"Datetime when the leaderboard opens. Default is at time of leaderboard creation."`
 }
 
 type HistoryEntry struct {
@@ -47,7 +46,7 @@ type Ranking struct {
 	ID            uuid.UUID `json:"id"`
 	Score         int       `json:"score"`
 	TimeSubmitted time.Time `json:"submitted_at"`
-	Verified      bool      `json:"verified"`
+	Verified      *bool     `json:"verified,omitempty"`
 }
 
 type User struct {
@@ -57,26 +56,10 @@ type User struct {
 }
 
 type LeaderboardInfo struct {
-	ID                  uuid.UUID     `json:"id"`
-	Title               string        `json:"title" example:"My First Leaderboard" doc:"Leaderboard title for associated submission."`
-	Verifiers           []User        `json:"verifiers,omitempty"`
-	TimeCreated         time.Time     `json:"created_at"`
-	StartTime           time.Time     `json:"start"`
-	Duration            time.Duration `json:"duration"`
-	HighestFirst        bool          `json:"highest_first"`
-	IsTime              bool          `json:"is_time"`
-	MultipleSubmissions bool          `json:"allow_multiple"`
-}
-
-func (li LeaderboardInfo) MarshalJSON() ([]byte, error) {
-	type Alias LeaderboardInfo
-	return json.Marshal(&struct {
-		Duration string `json:"duration"`
-		Alias
-	}{
-		Duration: li.Duration.Round(time.Second).String(),
-		Alias:    (Alias)(li),
-	})
+	ID          uuid.UUID `json:"id"`
+	Verifiers   []User    `json:"verifiers,omitempty"`
+	TimeCreated time.Time `json:"time_created"`
+	LeaderboardConfig
 }
 
 type DetailedSubmission struct {
@@ -100,7 +83,7 @@ func NewDBConn(ctx context.Context, connURL string) DB {
 	}
 	dbconfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
 
-		// conn.Exec(ctx, `DROP TABLE IF EXISTS leaderboards, submissions, verifiers, submission_updates, customers;`)
+		conn.Exec(ctx, `DROP TABLE IF EXISTS leaderboards, submissions, verifiers, submission_updates, customers;`)
 		_, err = conn.Exec(ctx, init_file)
 		if err != nil {
 			log.Fatal(err)
@@ -130,57 +113,9 @@ func NewDBConn(ctx context.Context, connURL string) DB {
 
 func (db DB) newLeaderboard(ctx context.Context, user_id string, config LeaderboardConfig) (uuid.UUID, error) {
 	var leaderboard_id uuid.UUID
-	if config.Start == nil && config.Duration == nil {
-		err := db.conn.QueryRow(ctx, `
-		WITH ins_leaderboard AS (
-			INSERT INTO leaderboards(created_by, display_name, highest_first, is_time, multiple_submissions) 
-			VALUES ($1, $2, $3, $4, $5)
-			RETURNING id
-		)
-		INSERT INTO verifiers(leaderboard, userid)
-		SELECT id, $1
-		FROM ins_leaderboard
-		RETURNING verifiers.leaderboard
-		`, user_id, config.Title, config.HighestFirst, config.IsTime, config.MultipleSubmissions).Scan(&leaderboard_id)
-
-		return leaderboard_id, err
-	}
-
-	if config.Start == nil && config.Duration != nil {
-		err := db.conn.QueryRow(ctx, `
-		WITH ins_leaderboard AS (
-			INSERT INTO leaderboards(created_by, display_name, highest_first, is_time, multiple_submissions, duration) 
-			VALUES ($1, $2, $3, $4, $5, $6)
-			RETURNING id
-		)
-		INSERT INTO verifiers(leaderboard, userid)
-		SELECT id, $1
-		FROM ins_leaderboard
-		RETURNING verifiers.leaderboard
-		`, user_id, config.Title, config.HighestFirst, config.IsTime, config.MultipleSubmissions, config.Duration).Scan(&leaderboard_id)
-
-		return leaderboard_id, err
-	}
-
-	if config.Start != nil && config.Duration == nil {
-		err := db.conn.QueryRow(ctx, `
-		WITH ins_leaderboard AS (
-			INSERT INTO leaderboards(created_by, display_name, highest_first, is_time, multiple_submissions, start) 
-			VALUES ($1, $2, $3, $4, $5, $6)
-			RETURNING id
-		)
-		INSERT INTO verifiers(leaderboard, userid)
-		SELECT id, $1
-		FROM ins_leaderboard
-		RETURNING verifiers.leaderboard
-		`, user_id, config.Title, config.HighestFirst, config.IsTime, config.MultipleSubmissions, config.Start).Scan(&leaderboard_id)
-
-		return leaderboard_id, err
-	}
-
 	err := db.conn.QueryRow(ctx, `
 		WITH ins_leaderboard AS (
-			INSERT INTO leaderboards(created_by, display_name, highest_first, is_time, start, duration, multiple_submissions) 
+			INSERT INTO leaderboards(created_by, title, highest_first, is_time, start, stop, needs_verification) 
 			VALUES ($1, $2, $3, $4, $5, $6, $7)
 			RETURNING id
 		)
@@ -188,7 +123,7 @@ func (db DB) newLeaderboard(ctx context.Context, user_id string, config Leaderbo
 		SELECT id, $1
 		FROM ins_leaderboard
 		RETURNING verifiers.leaderboard
-		`, user_id, config.Title, config.HighestFirst, config.IsTime, config.Start, config.Duration, config.MultipleSubmissions).Scan(&leaderboard_id)
+		`, user_id, config.Title, config.HighestFirst, config.IsTime, config.Start, config.Stop, config.NeedsVerify).Scan(&leaderboard_id)
 
 	return leaderboard_id, err
 }
@@ -231,7 +166,10 @@ func (db DB) addSubmissionComment(ctx context.Context, leaderboard uuid.UUID, su
 	_, err := db.conn.Exec(ctx, `
 		INSERT INTO submission_updates(submission, author, comment, action)
 		SELECT $2, $3, $4, 'comment'
-		WHERE EXISTS(SELECT 1 from verifiers WHERE verifiers.leaderboard=$1 AND verifiers.userid=$3)
+		WHERE ((EXISTS(SELECT 1 FROM leaderboards WHERE leaderboards.id=$1 AND leaderboards.needs_verification IS TRUE)
+				AND EXISTS(SELECT 1 FROM verifiers WHERE verifiers.leaderboard=$1 AND verifiers.userid=$3)) 
+			OR EXISTS(SELECT 1 FROM leaderboards WHERE leaderboards.id=$1 AND leaderboards.needs_verification IS FALSE)
+			);
 		`, leaderboard, submission, author, comment)
 
 	if err != nil {
@@ -241,7 +179,6 @@ func (db DB) addSubmissionComment(ctx context.Context, leaderboard uuid.UUID, su
 }
 
 func (db DB) verifyScore(ctx context.Context, leaderboard uuid.UUID, submission uuid.UUID, author string, is_valid bool, comment string) (int64, error) {
-
 	result, err := db.conn.Exec(ctx, `
 		WITH insert_history AS (
 			INSERT INTO submission_updates(submission, author, comment, action)
@@ -251,7 +188,11 @@ func (db DB) verifyScore(ctx context.Context, leaderboard uuid.UUID, submission 
 		SET verified=$4
 		WHERE submissions.leaderboard=$1
 			AND submissions.id=$2 
-			AND EXISTS(SELECT 1 FROM verifiers WHERE verifiers.leaderboard=$1 AND verifiers.userid=$3)
+			AND (
+				(EXISTS(SELECT 1 FROM leaderboards WHERE leaderboards.id=$1 AND leaderboards.needs_verification IS TRUE)
+					AND EXISTS(SELECT 1 FROM verifiers WHERE verifiers.leaderboard=$1 AND verifiers.userid=$3)) 
+				OR EXISTS(SELECT 1 FROM leaderboards WHERE leaderboards.id=$1 AND leaderboards.needs_verification IS FALSE)
+			);
 		`, leaderboard, submission, author, is_valid, comment)
 
 	if err != nil {
@@ -264,7 +205,7 @@ func (db DB) getSubmissionInfo(ctx context.Context, leaderboard uuid.UUID, submi
 	var submissionInfo DetailedSubmission
 	var submitter User
 	err := db.conn.QueryRow(ctx, `
-		SELECT submissions.created_at, submissions.score, submissions.link, submissions.leaderboard, leaderboards.display_name, "user".name, "user".id, submissions.verified
+		SELECT submissions.created_at, submissions.score, submissions.link, submissions.leaderboard, leaderboards.title, "user".name, "user".id, submissions.verified
 		FROM submissions
 		LEFT JOIN leaderboards
 		ON leaderboards.id=submissions.leaderboard
@@ -321,10 +262,10 @@ func (db DB) updateSubmissionScore(ctx context.Context, leaderboard uuid.UUID, s
 func (db DB) getLeaderboardInfo(ctx context.Context, leaderboard uuid.UUID) (LeaderboardInfo, error) {
 	var info LeaderboardInfo
 	err := db.conn.QueryRow(ctx, `
-		SELECT display_name, start, duration, is_time, multiple_submissions, highest_first, created_at
+		SELECT title, start, stop, is_time, needs_verification, highest_first, created_at
 		FROM leaderboards 
 		WHERE id=$1;
-		`, leaderboard).Scan(&info.Title, &info.StartTime, &info.Duration, &info.IsTime, &info.MultipleSubmissions, &info.HighestFirst, &info.TimeCreated)
+		`, leaderboard).Scan(&info.Title, &info.LeaderboardConfig.Start, &info.Stop, &info.IsTime, &info.NeedsVerify, &info.HighestFirst, &info.TimeCreated)
 
 	if err != nil {
 		return info, err
@@ -365,7 +306,7 @@ func (db DB) getVerifiers(ctx context.Context, leaderboard_id uuid.UUID) ([]User
 
 func (db DB) getAccountLeaderboards(ctx context.Context, user_id string) ([]LeaderboardInfo, error) {
 	rows, err := db.conn.Query(ctx, `
-		SELECT id, display_name, created_at
+		SELECT id, title, created_at, start, stop
 		FROM leaderboards
 		WHERE created_by=$1
 		ORDER BY 
@@ -381,7 +322,7 @@ func (db DB) getAccountLeaderboards(ctx context.Context, user_id string) ([]Lead
 
 	for rows.Next() {
 		var li LeaderboardInfo
-		if err := rows.Scan(&li.ID, &li.Title, &li.TimeCreated); err != nil {
+		if err := rows.Scan(&li.ID, &li.Title, &li.TimeCreated, &li.Start, &li.Stop); err != nil {
 			return leaderboards, err
 		}
 		leaderboards = append(leaderboards, li)
@@ -394,7 +335,7 @@ func (db DB) getAccountLeaderboards(ctx context.Context, user_id string) ([]Lead
 
 func (db DB) getAccountSubmissions(ctx context.Context, user_id string) ([]DetailedSubmission, error) {
 	rows, err := db.conn.Query(ctx, `
-		SELECT submissions.id, leaderboards.display_name, submissions.created_at, submissions.score, leaderboards.id
+		SELECT submissions.id, leaderboards.title, submissions.created_at, submissions.score, leaderboards.id
 		FROM submissions
 		LEFT JOIN leaderboards
 		ON submissions.leaderboard=leaderboards.id
@@ -425,15 +366,15 @@ func (db DB) getAccountSubmissions(ctx context.Context, user_id string) ([]Detai
 
 func (db DB) getLeaderboard(ctx context.Context, leaderboard uuid.UUID) ([]Ranking, error) {
 	rows, err := db.conn.Query(ctx, `
-		WITH leaderboard_config(cutoff, highest_first) AS (
+		WITH leaderboard_config(cutoff, highest_first, needs_verification) AS (
 			SELECT
-				CASE WHEN duration is NULL THEN NULL
-				ELSE start + duration
-				END, highest_first
+				CASE WHEN stop is NULL THEN NULL
+				ELSE stop
+				END, highest_first, needs_verification
 			FROM leaderboards
 			WHERE id=$1
 		)
-		SELECT submissions.userid, submissions.score, submissions.created_at, submissions.verified, submissions.id, "user".name
+		SELECT submissions.userid, submissions.score, submissions.created_at, (CASE WHEN leaderboard_config.needs_verification THEN submissions.verified ELSE NULL END), submissions.id, "user".name
 		FROM 
 			(submissions LEFT JOIN "user"
 				ON "user".id = submissions.userid), 
@@ -511,7 +452,7 @@ func (db DB) getActiveLeaderboardCount(ctx context.Context, user_id string) (int
 	err := db.conn.QueryRow(ctx, `
 		SELECT COUNT(*)
 		FROM leaderboards
-		WHERE created_by=$1 AND (start + duration > NOW() OR duration is NULL)
+		WHERE created_by=$1 AND (stop > NOW() OR stop is NULL)
 		`, user_id).Scan(&rowCount)
 	if err != nil {
 		return -1, err

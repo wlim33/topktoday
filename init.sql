@@ -24,18 +24,18 @@ CREATE TABLE IF NOT EXISTS customers (
 CREATE TABLE IF NOT EXISTS leaderboards (
 	id UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
 	created_by TEXT REFERENCES "user"(id) ON UPDATE CASCADE,
-	display_name TEXT,
+	title TEXT,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
 	highest_first BOOLEAN NOT NULL DEFAULT TRUE,
 	is_time BOOLEAN NOT NULL DEFAULT FALSE,
-	uses_verification BOOLEAN NOT NULL DEFAULT FALSE,
-	duration INTERVAL DEFAULT INTERVAL '1 day' NOT NULL,
+	needs_verification BOOLEAN NOT NULL DEFAULT FALSE,
 	start TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	multiple_submissions BOOLEAN DEFAULT TRUE,
+	stop TIMESTAMP,
 	PRIMARY KEY(id, created_by)
 );
 
+ALTER TABLE leaderboards ADD CONSTRAINT start_before_stop CHECK (start < stop OR stop IS NULL);
 
 
 
