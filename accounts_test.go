@@ -42,7 +42,6 @@ func TestGetUserLeaderboards(t *testing.T) {
 
 		if lResp, getResp := getAccountLeaderboards(t, api, users["player2"]); assert.Equal(t, 200, getResp.Code) {
 			assert.Equal(t, 2, len(lResp.Leaderboards))
-			assert.Equal(t, 1, lResp.Leaderboards)
 			assert.False(t, lResp.Leaderboards[0].TimeCreated.IsZero())
 			assert.False(t, lResp.Leaderboards[1].TimeCreated.IsZero())
 		}
